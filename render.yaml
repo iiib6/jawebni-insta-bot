@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: jawebni-n8n
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: N8N_PORT
+        value: "10000"
+      - key: PORT
+        value: "10000"
+      - key: N8N_HOST
+        value: "0.0.0.0"
+      - key: N8N_PROTOCOL
+        value: "https"
+      - key: N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS
+        value: "false"

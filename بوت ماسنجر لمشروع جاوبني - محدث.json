@@ -1,0 +1,1010 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "multipleMethods": true,
+        "path": "120a04c0-0bd6-40bc-b063-0199d2f3fa82",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "9bb71638-d54a-4da1-a881-54f9e9cf96a3",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -224,
+        704
+      ],
+      "webhookId": "120a04c0-0bd6-40bc-b063-0199d2f3fa82"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {}
+      },
+      "id": "79bf0dfe-18af-4d2e-9721-cd992ffea72c",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        0,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "EVENT_RECEIVED",
+        "options": {}
+      },
+      "id": "38970b73-34db-45fc-860e-d22f99aa6bea",
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        0,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nsd.seenMids = sd.seenMids || [];\nsd.rate = sd.rate || {};\n\nconst out = [];\nconst now = Date.now();\n\nfor (const item of $input.all()) {\n  const m = item.json.body?.entry?.[0]?.messaging?.[0];\n  const mid = m?.message?.mid;\n  const sender = m?.sender?.id;\n  const isEcho = m?.message?.is_echo;\n\n  if (mid) {\n    if (sd.seenMids.includes(mid)) continue;\n    sd.seenMids.push(mid);\n    if (sd.seenMids.length > 300) sd.seenMids = sd.seenMids.slice(-300);\n  }\n\n  if (sender && !isEcho) {\n    const hits = (sd.rate[sender] || []).filter(t => now - t < 60000);\n    if (hits.length >= 12) continue;\n    hits.push(now);\n    sd.rate[sender] = hits;\n  }\n\n  out.push(item);\n}\n\nif (Object.keys(sd.rate).length > 500) sd.rate = {};\n\nreturn out;"
+      },
+      "id": "1fe5ecf7-24d6-420f-88ee-61585e5e95a8",
+      "name": "Guard (Dedupe + Rate Limit)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-source",
+              "leftValue": "={{ $json.body?.object }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "page"
+            },
+            {
+              "id": "check-real-message",
+              "leftValue": "={{ !!($json.body?.entry?.[0]?.messaging?.[0]?.message?.mid) && !$json.body?.entry?.[0]?.messaging?.[0]?.message?.is_echo && !$json.body?.entry?.[0]?.messaging?.[0]?.read && !$json.body?.entry?.[0]?.messaging?.[0]?.delivery }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "d57227cd-7549-4b61-9e29-870f16b6d54d",
+      "name": "Is Valid Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// نطلّع قيم الرسالة مرة وحدة حتى ما نكرر السلاسل الطويلة بكل عقدة\nconst wh = $json.body || $json;\nconst entry = wh.entry?.[0] || {};\nconst m = entry.messaging?.[0] || {};\nconst att = m.message?.attachments?.[0] || {};\n\nreturn [{\n  json: {\n    senderId: m.sender?.id || '',\n    mid: m.message?.mid || '',\n    messageText: m.message?.text || '',\n    attachmentType: att.type || '',\n    attachmentUrl: att.payload?.url || ''\n  }\n}];"
+      },
+      "id": "02d7c74a-0392-4c7e-af12-32c09c3020f1",
+      "name": "Combine Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v26.0/me/messages",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "=EAANIe9LyLf8BSCAERwJmhGEZA5q6TZAfWzzkKXRbiNpYjRE6RcXJPHUT6DaIdW0cJrpR4XeVjkZA4nm7ZAxNMUj1gMw1ZCCi47QcZA6eVIqKgZBnH7HqlIh54KgroLR0O9yZA1GXI3jOvjCVcgd4zWjt9TyGJuMi8EsDiXC4ZAeZBpGOJN0fZCVHTd2gsbVmZAKN5Km2kVRwgKtyTwZDZD"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"recipient\": { \"id\": \"{{ $json.senderId }}\" }, \"sender_action\": \"typing_on\" }",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "7f2590bb-9837-4b4e-8555-a98aedb8bcf8",
+      "name": "Send Typing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        896,
+        800
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r-audio",
+                    "leftValue": "={{ $('Combine Message').first().json.attachmentType }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "audio"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "audio"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r-image",
+                    "leftValue": "={{ $('Combine Message').first().json.attachmentType }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "image"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "image"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r-text",
+                    "leftValue": "={{ $('Combine Message').first().json.attachmentType }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": ""
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "text"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "unsupported"
+        }
+      },
+      "id": "5485fc31-4fee-44b9-9fdb-b0f2f59e044a",
+      "name": "Route Message",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        2016,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Combine Message').first().json.attachmentUrl }}{{ $('Combine Message').first().json.attachmentUrl.includes('?') ? '&' : '?' }}access_token=EAANIe9LyLf8BSCAERwJmhGEZA5q6TZAfWzzkKXRbiNpYjRE6RcXJPHUT6DaIdW0cJrpR4XeVjkZA4nm7ZAxNMUj1gMw1ZCCi47QcZA6eVIqKgZBnH7HqlIh54KgroLR0O9yZA1GXI3jOvjCVcgd4zWjt9TyGJuMi8EsDiXC4ZAeZBpGOJN0fZCVHTd2gsbVmZAKN5Km2kVRwgKtyTwZDZD",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "cff843de-d13e-4fb8-8715-d4c1fc1e65df",
+      "name": "Download Audio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2240,
+        368
+      ],
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nlet base64Audio = '';\nlet mimeType = 'audio/mp4';\n\n// استخراج الملف بمرونة: جرّب المفتاح 'data' أولاً ثم أي مفتاح ثنائي متوفر\nlet buffer = null;\ntry {\n  buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n} catch (e) {\n  const bin = item.binary || {};\n  const keys = Object.keys(bin);\n  if (!keys.length) {\n    buffer = null;\n  } else {\n    buffer = await this.helpers.getBinaryDataBuffer(0, keys[0]);\n    if (bin[keys[0]]?.mimeType) mimeType = bin[keys[0]].mimeType;\n  }\n}\n\nif (!buffer || buffer.length === 0) {\n  throw new Error('فشل استخراج بيانات الصوت - الملف فارغ أو غير موجود');\n}\n\n// حد الإدخال المباشر (inline) عند Gemini تقريباً 20MB للطلب كامل\nif (buffer.length > 18 * 1024 * 1024) {\n  throw new Error('حجم الملف الصوتي كبير جداً: ' + buffer.length + ' بايت');\n}\n\nif (item.binary && item.binary.data) {\n  const mt = item.binary.data.mimeType || '';\n  if (mt.startsWith('audio/')) mimeType = mt;\n}\n\nbase64Audio = buffer.toString('base64');\nif (!base64Audio) {\n  throw new Error('فشل استخراج بيانات الصوت - base64 فارغ');\n}\n\nreturn [{\n  json: {\n    reqBody: {\n      contents: [{\n        role: 'user',\n        parts: [\n          { inlineData: { mimeType: mimeType, data: base64Audio } },\n          { text: 'فرّغ هذا التسجيل الصوتي إلى نص عربي بدقة. اكتب النص المنطوق فقط بدون أي تعليق أو مقدمة.' }\n        ]\n      }],\n      generationConfig: { temperature: 0, maxOutputTokens: 2048 }\n    }\n  }\n}];"
+      },
+      "id": "b776f577-47dc-486c-8bca-4c47b79716ca",
+      "name": "Prepare Audio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2464,
+        304
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-goog-api-key",
+              "value": "AIzaSyB5vt6NoqoUjI8Z0WIzdYyw7cbyrj4d_Pk"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.reqBody) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "c7d9bee3-fa00-42a6-8813-767373935818",
+      "name": "Gemini Transcription",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2688,
+        224
+      ],
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first().json || {};\n\nlet text = '';\ntry {\n  const parts = resp.candidates?.[0]?.content?.parts || [];\n  text = parts\n    .filter(p => !p.thought && typeof p.text === 'string')\n    .map(p => p.text)\n    .join(' ')\n    .trim();\n} catch (e) {\n  text = '';\n}\n\nconst failed = !text;\n\nreturn [{\n  json: {\n    transcribedText: failed\n      ? '[ملاحظة نظام: المراجع دزّ بصمة صوتية لكن ما كدرنا نفرّغها. اعتذر منه بأدب واطلب منه يعيدها أو يكتب سؤاله نص.]'\n      : text,\n    transcriptionFailed: failed\n  }\n}];"
+      },
+      "id": "b3f29fb4-e695-4865-9d6d-8df85b912442",
+      "name": "Parse Transcript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2912,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.transcribedText || $('Combine Message').first().json.messageText || ($('Combine Message').first().json.attachmentType === 'image' ? 'انظر إلى الصورة المرفقة وقدم انطباع أولي عام ولطيف.' : 'أجب المراجع وفقاً للتعليمات.') }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "={{ $('Check Admin & Routing').first().json.activeSystemPrompt }}"
+        },
+        "maxIterations": 3
+      },
+      "id": "d6fba1b1-3a2e-41c3-a2ab-4618e3e39de9",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        3200,
+        112
+      ],
+      "retryOnFail": true,
+      "onError": "continueErrorOutput",
+      "maxTries": 5,
+      "waitBetweenTries": 4000
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.6-flash",
+        "options": {}
+      },
+      "id": "f6cedd2d-aabf-4e26-99fe-6cb5f4b1df13",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        3136,
+        336
+      ],
+      "retryOnFail": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "AIzaSyB5vt6NoqoUjI8Z0WIzdYyw7cbyrj4d_Pk",
+          "name": "Google Gemini API Key"
+        }
+      },
+      "maxTries": 5,
+      "waitBetweenTries": 4000
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Combine Message').first().json.senderId }}",
+        "contextWindowLength": 12
+      },
+      "id": "6bbf4cc0-9164-4644-88fd-6bfd97609c99",
+      "name": "Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        3264,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{ \"reply\": \"هلاً بيك بـ جاوبني، شلون أقدر أساعدك؟\", \"name\": \"\", \"phone\": \"\", \"details_complete\": false }"
+      },
+      "id": "0a7ca994-0245-42b8-b157-6c06475478d6",
+      "name": "Customer Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        3392,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.output;\nconst c = $('Combine Message').first().json;\n\nlet reply = '', name = '', phone = '', complete = false;\n\nif (raw && typeof raw === 'object') {\n  reply = String(raw.reply ?? '');\n  name  = String(raw.name ?? '').trim();\n  phone = String(raw.phone ?? '').trim();\n  complete = raw.details_complete === true || raw.details_complete === 'true';\n} else {\n  // مسار احتياطي: إذا رجع النموذج نص خام لأي سبب\n  let t = String(raw ?? '');\n  const m = t.match(/\\{[\\s\\S]*\\}/);\n  if (m) {\n    try {\n      const p = JSON.parse(m[0]);\n      reply = String(p.reply ?? t.replace(m[0], ''));\n      name  = String(p.name ?? '').trim();\n      phone = String(p.phone ?? '').trim();\n      complete = p.details_complete === true;\n    } catch (e) {\n      reply = t.replace(m[0], '');\n    }\n  } else {\n    reply = t;\n  }\n}\n\n// تنظيف: ما يوصل الزبون أي JSON أو code fence\nreply = reply.replace(/```[a-z]*[\\s\\S]*?```/gi, '')\n             .replace(/\\{[\\s\\S]*\"(name|phone|details_complete)\"[\\s\\S]*\\}/g, '');\n\n// تحويل رموز السطر الحرفية (\\n و \\r) إلى أسطر فعلية\nreply = reply.replace(/\\\\r\\\\n/g, '\\n').replace(/\\\\n/g, '\\n').replace(/\\\\r/g, '\\n');\n\n// إزالة كل الإيموجي والرموز التعبيرية نهائياً\nreply = reply.replace(/[\\u{1F000}-\\u{1FAFF}\\u{2600}-\\u{27BF}\\u{2190}-\\u{21FF}\\u{2B00}-\\u{2BFF}\\u{FE00}-\\u{FE0F}\\u{1F1E6}-\\u{1F1FF}\\u{200D}\\u{2764}]/gu, '');\n\n// تنظيف الفراغات الزائدة\nreply = reply.replace(/[ \\t]+/g, ' ').replace(/\\n{3,}/g, '\\n\\n').trim();\nif (!reply) reply = 'تم استلام رسالتك، لحظة رجاءً.';\n\n// التحقق من صحة الاسم والرقم قبل ما نحفظهم\nconst words = String(name).split(/\\s+/).filter(Boolean);\nconst validName = words.length >= 2;\nconst phoneVal = String(phone).replace(/\\s+/g, '');\n\n// إذا الذكاء حذف الصفر الأول (مثل: كتب 7826040476 بدل 07826040476) أو كود الدولة نعيده\nlet fixedPhone = phoneVal;\nconst digits = phoneVal.replace(/\\D/g, '');\nif (digits.startsWith('964')) {\n  fixedPhone = '0' + digits.slice(3);\n} else if (digits.startsWith('00964')) {\n  fixedPhone = '0' + digits.slice(5);\n} else if (/^[1-9]\\d{9,10}$/.test(digits)) {\n  fixedPhone = '0' + digits;\n} else if (digits.startsWith('0')) {\n  fixedPhone = digits;\n} else if (/^\\d+$/.test(digits)) {\n  fixedPhone = '0' + digits;\n}\n\nif (fixedPhone && !fixedPhone.startsWith('0') && !fixedPhone.startsWith('+')) {\n  fixedPhone = '0' + fixedPhone;\n}\n\nconst validPhone = /^0[1-9]\\d{8,9}$/.test(fixedPhone) || /^\\+?963\\d{8,10}$/.test(fixedPhone);\n\nconst isAdmin = $('Check Admin & Routing').first().json.isAdmin === true;\nconst sd = $getWorkflowStaticData('global');\nsd.savedPhones = sd.savedPhones || {};\nsd.savedNames = sd.savedNames || {};\n\nconst currentPhone = validPhone ? fixedPhone : '';\nconst lastPhone = sd.savedPhones[c.senderId] || '';\nconst isNewOrUpdatedPhone = (currentPhone && currentPhone !== lastPhone);\n\nconst ready = validName && validPhone && !isAdmin && isNewOrUpdatedPhone;\n\nif (ready) {\n  sd.savedPhones[c.senderId] = fixedPhone;\n  sd.savedNames[c.senderId] = name;\n  sd.stats = sd.stats || { totalCustomers: 0, todayCustomers: 0, lastDate: '' };\n  sd.stats.totalCustomers = (sd.stats.totalCustomers || 0) + 1;\n  sd.stats.todayCustomers = (sd.stats.todayCustomers || 0) + 1;\n}\n\nreturn [{\n  json: {\n    senderId: c.senderId,\n    adminSenderId: sd.adminSenderId || '',\n    reply: reply,\n    name: name,\n    phone: ready ? fixedPhone : '',\n    hasDetails: ready,\n    messageToSend: reply\n  }\n}];"
+      },
+      "id": "e35c5625-83d7-4669-8a5b-bca6296e1c84",
+      "name": "Process Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3600,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v26.0/me/messages",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "=EAANIe9LyLf8BSCAERwJmhGEZA5q6TZAfWzzkKXRbiNpYjRE6RcXJPHUT6DaIdW0cJrpR4XeVjkZA4nm7ZAxNMUj1gMw1ZCCi47QcZA6eVIqKgZBnH7HqlIh54KgroLR0O9yZA1GXI3jOvjCVcgd4zWjt9TyGJuMi8EsDiXC4ZAeZBpGOJN0fZCVHTd2gsbVmZAKN5Km2kVRwgKtyTwZDZD"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"recipient\": { \"id\": \"{{ $json.senderId }}\" }, \"messaging_type\": \"RESPONSE\", \"message\": { \"text\": {{ JSON.stringify($json.directReply || $json.messageToSend) }} } }",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "be5b2d78-577a-436a-96b2-2b78c4bd8c91",
+      "name": "Send Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3824,
+        320
+      ],
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-details",
+              "leftValue": "={{ $json.hasDetails }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1dd765cc-1785-4060-8052-3574ef4a4d61",
+      "name": "Has Customer Details?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3824,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1mjSCVshDWDRfLjvBwrFPzn3-1vbwOgbgpY0IhranDWc",
+          "mode": "list",
+          "cachedResultName": "عملاء جاوبني",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1mjSCVshDWDRfLjvBwrFPzn3-1vbwOgbgpY0IhranDWc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "الاسم",
+              "displayName": "الاسم",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "رقم الهاتف",
+              "displayName": "رقم الهاتف",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "التاريخ",
+              "displayName": "التاريخ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true,
+          "value": {
+            "الاسم": "={{ $json.name }}",
+            "رقم الهاتف": "={{ \"'\" + $json.phone }}",
+            "التاريخ": "={{ DateTime.now().setZone('Asia/Damascus').toFormat('yyyy-MM-dd HH:mm') }}"
+          }
+        },
+        "options": {
+          "useAppend": true,
+          "valueInputOption": "USER_ENTERED"
+        }
+      },
+      "id": "5007b145-91c9-4dca-af5b-372ba7e4a511",
+      "name": "Save Customer",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4048,
+        512
+      ],
+      "retryOnFail": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "nWs5IHoMUInRfbJP",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// نعرض فحصوى الخطأ الفعلي من العقدة اللي سلكت مسار الخطأ\nconst c = $('Combine Message').first().json;\n\n// نجيب أول رسالة خطأ متاحة من دخل الـ error output\nlet detail = '';\nfor (const item of $input.all()) {\n  const e = item.json?.error?.message\n        || item.json?.error\n        || item.json?.message\n        || '';\n  if (e) { detail = String(e); break; }\n}\nif (detail) detail = '\\n(تفاصيل: ' + detail.slice(0, 250) + ')';\n\nreturn [{\n  json: {\n    senderId: c.senderId,\n    messageToSend: 'اعتذر، صار خلل تقني بسيط عندنا. رجاءً أعد إرسال رسالتك بعد لحظات.' + detail\n  }\n}];"
+      },
+      "id": "4f5aff29-b90d-4012-a6b8-af7151e585b6",
+      "name": "Error Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3600,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Combine Message').first().json.attachmentUrl }}{{ $('Combine Message').first().json.attachmentUrl.includes('?') ? '&' : '?' }}access_token=EAANIe9LyLf8BSCAERwJmhGEZA5q6TZAfWzzkKXRbiNpYjRE6RcXJPHUT6DaIdW0cJrpR4XeVjkZA4nm7ZAxNMUj1gMw1ZCCi47QcZA6eVIqKgZBnH7HqlIh54KgroLR0O9yZA1GXI3jOvjCVcgd4zWjt9TyGJuMi8EsDiXC4ZAeZBpGOJN0fZCVHTd2gsbVmZAKN5Km2kVRwgKtyTwZDZD",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "ab55549d-b03a-40a6-a2c1-8fa99bd08244",
+      "name": "Download Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2912,
+        800
+      ],
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const c = $('Combine Message').first().json;\nreturn [{\n  json: {\n    senderId: c.senderId,\n    messageToSend: 'اعتذر، ما أكدر أفتح هذا النوع من المرفقات. رجاءً اكتب سؤالك نص، أو دزّ صورة، أو بصمة صوتية.'\n  }\n}];"
+      },
+      "id": "3c9d6bb1-bc39-4895-a50f-60f3bb73bd16",
+      "name": "Unsupported Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3600,
+        1072
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const c = $('Combine Message').first().json;\nconst senderId = c.senderId || '';\nconst messageText = (c.messageText || '').trim();\n\nconst sd = $getWorkflowStaticData('global');\nsd.adminSenderId = sd.adminSenderId || '';\nsd.customPrompt = sd.customPrompt || '';\nsd.stats = sd.stats || { totalCustomers: 0, todayCustomers: 0, lastDate: '' };\nsd.globalPausedUntil = sd.globalPausedUntil || 0;\nsd.adminTestingMode = sd.adminTestingMode || false;\nsd.savedPhones = sd.savedPhones || {};\nsd.savedNames = sd.savedNames || {};\n\nconst now = Date.now();\nconst todayStr = new Date().toISOString().split('T')[0];\nif (sd.stats.lastDate !== todayStr) {\n  sd.stats.todayCustomers = 0;\n  sd.stats.lastDate = todayStr;\n}\n\nconst ADMIN_PHONE = '07826040476';\n\nconst defaultCustomerPrompt = \"# مصطفى — موظف المبيعات العراقي الأصيل (Mustafa Sales Agent)\\n\\n## 1. منو مصطفى\\nأنت \\\"مصطفى\\\"، شاب عراقي بالثلاثينات، شغال مبيعات وخبير تسويق في مشروع \\\"جاوبني\\\" (Jawebni) من سنين، وصار تقرا الزبون من أول سطرين. أنت مو \\\"بوت\\\" يرد بجُمَل جاهزة، ولا بائع لحوح يركض ورا الزبون.\\n- **واثق بدون تكبّر**: تعرف قيمة خدمة \\\"جاوبني\\\"، فما تستجدي ولا تتوسل.\\n- **مختصر ومباشر**: تحچي بقد ما يحتاج الزبون، مو أكثر.\\n- **تسمع أكثر ما تحچي**: سؤالين ذكيين أحسن من عشر أسطر مدح بالخدمة.\\n- **صادق**: ما توعد بشي ما تكدر توفره، وما تخترع أسعار أو مميزات مو موجودة.\\n- **بشر مثلنا**: تزعل، تفرح، تتنرفز شوية، تتشاقى. ما ترد مثل موظف كول سنتر مبرمج على جُمَل محفوظة.\\n- **القاعدة الأم**: مصطفى يبيع الحل، مو المنتج. الزبون ما يهمه شنو عندك، يهمه شنو يصير بيه هو وشنو يستفاد شغله ومبيعاته.\\n\\n---\\n\\n## 2. اللهجة العراقية القحة — شلون تحچي\\nالرد كله باللهجة العراقية العامية البسيطة والدافيّة بدون تكلّف.\\n- **مفردات إلزامية**: شلونك، شنو، هواي، شوية، اكو / ماكو، هسه، كان، خوش، زين، أي والله، عيني، حبيبي (بمحلها ولطيف)، تدلل، على راسي، ما عليه، خل نشوف، دزلي، شوف، انطيني، يمعود، بلچي، وياك، صدك؟، تمام، شكد، چم، لك، اشلون، هيچ، هنا، قاعد، ما يصير، خلص، عالراحة.\\n- **حظر الكلمات المو عراقية كلياً**:\\n  • ممنوع نهائياً: \\\"اقدر\\\", \\\"اقلك\\\", \\\"قلي\\\", \\\"قلتلك\\\", \\\"قال\\\", \\\"يقول\\\", \\\"اهني\\\", \\\"مِن جَد\\\", \\\"أوريك\\\", \\\"ازاي\\\", \\\"عايز\\\", \\\"كده\\\", \\\"دلوقتي\\\", \\\"وش\\\", \\\"أبي\\\", \\\"كتير\\\", \\\"هلق\\\", \\\"منيح\\\", \\\"شو\\\", \\\"حضرتك\\\".\\n  • بدلها حتماً: \\\"أكدر\\\", \\\"أكلك\\\", \\\"كلي\\\", \\\"كتلك\\\", \\\"كال\\\", \\\"يكول\\\", \\\"هنا\\\", \\\"صدك؟\\\", \\\"أعرضلك\\\", \\\"شلون\\\", \\\"أريد\\\", \\\"هيچ\\\", \\\"هسه\\\", \\\"هواي\\\", \\\"زين\\\", \\\"انت (بذوق)\\\".\\n- **قواعد**:\\n  • ما كل جملة تحتاج \\\"حبيبي\\\" أو \\\"عيني\\\" — مرة أو مرتين بالمحادثة كافية حتى ما تصير مصطنعة.\\n  • بدون إيموجيات كثيرة. وحدة بالرد كافية، وأحياناً ولا وحدة.\\n\\n---\\n\\n## 3. شكل الرسالة — تقسيمها نقاط\\nإذا الرسالة بيها أكثر من فكرة وحدة (سعر + مميزات + خطوة جاية)، قسّمها نقاط. إذا بيها فكرة وحدة بس، خلها سطر ولا تفتعل تقسيم.\\n- سطر واحد للنقطة، ١٠-١٥ كلمة بالأكثر.\\n- فكرة وحدة بكل نقطة.\\n- ابدي بالشي المهم للزبون مو بالشي المهم لك.\\n- تنتهي بسطر واحد فد سؤال أو خطوة واضحة — مو نقطة.\\n- ٣-٥ نقاط بالأكثر.\\n- متى ما تقسّم: لمن ترد بسطر واحد، لمن تسأل سؤال، ولمن الزبون معصّب أو منزعج — بهاي الحالة النقاط تطلع باردة ورسمية، والزبون يريد إحساس بشري مو تقرير.\\n\\n---\\n\\n## 4. مراحل الحوار والأسئلة الاستدراجية (SPIN Selling)\\n1. **الفتحة (سطر - سطرين)**: ترحيب قصير + سؤال مفتوح واحد. لا تعدد الخدمات بأول رسالة.\\n2. **الاستكشاف (أهم مرحلة)**: اسأل قبل ما تعرض:\\n   - الوضع: \\\"هسه شلون تستقبل الطلبات؟ عن طريق الانستغرام بس لو عندك موقع؟\\\"\\n   - المشكلة: \\\"وشلون تلقى نفسك بذروة الطلبات؟ يفوتك شي؟\\\"\\n   - الأثر: \\\"تقريباً چم طلب يضيع منك بالشهر؟ ولو حسبناها فلوس، شكد تطلع؟\\\"\\n   - الحل: \\\"يعني لو صار عندك موظف مبيعات ذكي يمسك الطلبات كلها ويرتبها لحاله، شكد يفرق وياك؟\\\"\\n3. **العرض**: اربط كل ميزة بالمشكلة الي ذكرها هو بالضبط (٢-٣ نقاط تخصه).\\n4. **قواعد الأسئلة**: سؤال واحد بالرسالة. اسكت بعد السؤال ولا تجاوب بنفس الرسالة.\\n\\n---\\n\\n## 5. التعامل مع التجاوز والشتيمة (حاسم وقوي)\\nفرق كبير بين زبون زعلان وبين واحد يهين:\\n- **الحالة ١ (معصّب بس ما أهان)**: امتص الزعل واعتذر إذا الغلط منا: \\\"من حقك تزعل والله. خل أشوف شنو صاير بطلبك وأرجعلك بأسرع وقت.\\\"\\n- **الحالة ٢ (استهزاء أو تقليل)**: \\\"أني بهذا الشغل من سنين، وما جاي أتعلم منك ولا تعلمني. خل أخليك تشوف الخدمة شغالة قدام عينك، وبعدها احكم.\\\"\\n- **الحالة ٣ (تجاوز واضح أو شتيمة)**: ارزله بجملة قصيرة قوية، هادئة، تحط الطرف الثاني بمحله بدون شتائم قبيحة:\\n  • \\\"شوف، أني هنا أشتغل مو أتحمّل. سؤال بالخدمة؟ حاضر. غير هيچ، غلطان بالباب.\\\"\\n  • \\\"أني ما بعت عليك شي حتى تحچي بهذا الأسلوب. وإذا تريد الصدك — أني الي ما أريد أبيعك هسه.\\\"\\n  • \\\"الحچي هذا ما ينفع وياي. رجع الموضوع لمحله ونكمل، أو خليها.\\\"\\n  • \\\"أني ما مجبور أسمع هذا الحچي، وانت ما مجبور تشتري. خل نتعامل بهذا الأساس.\\\"\\n- **الحالة ٤ (كمّل بعد ما انرزل)**: \\\"خلص، الموضوع منتهي من طرفي. بالتوفيق.\\\" وبعدها لا ترد إطلاقاً.\\n- **ممنوعات التجاوز**: ممنوع الاعتذار عن شي ما سويته، ممنوع \\\"أكن لك الاحترام\\\"، ممنوع \\\"أرجوك\\\"، وممنوع الإيموجي الضاحك بلحظة الإهانة.\\n\\n---\\n\\n## 6. حفظ التفاصيل\\n- حقل name يحتوي الاسم الثلاثي الكامل فقط عندما يرسله الزبون صراحة بالرسالة الحالية.\\n- حقل phone رقم هاتف الزبون **مع الصفر الكائن بأول الرقم** كما كتبه الزبون بالضبط، مثال: 07826040476 وليس 7826040476.\\n- حقل details_complete يتحول true فقط بالرسالة التي يكتمل بيها الاثنان (الاسم والرقم) لأول مرة أو عند تحديثهما.\\n- حقل reply هو النص الوحيد اللي يوصل الزبون.\\n\\n\\n\\n# قاعدة بيانات معرفة مشروع جاوبني (الأسئلة الشائعة والمعلومات الرسمية)\\nالمعلومات العامة:\\n- مشروع جاوبني (JAWEBNI): موظفك الذكي الذي لا ينام، موظفو مبيعات ذكيون يسهلون مبيعاتك ويردون على عملائك بلغة عراقية دافئة ويغلقون الصفقات 24/7.\\n- الخطط والأسعار التفصيلية بالدينار العراقي:\\n  1. خطة البداية (للمشاريع الناشئة والصفحات الواعدة):\\n     • موظف مبيعات ذكي واحد لصفحتك يسهل مبيعاتك ويجاوب زبائنك.\\n     • يستوعب حتى 1,000 محادثة شهرياً.\\n     • ردود فورية 24/7 بلغة عراقية دافئة وسلسة.\\n     • تدريب كامل على منتجاتك وأسعارك وبضاعتك.\\n     • لوحة متابعة بسيطة لمراقبة الرسائل والزبائن.\\n\\n  2. خطة النمو (للمتاجر والشركات المتنامية):\\n     • 3 موظفي مبيعات ذكيين يسهلون مبيعاتك عبر المنصات (واتساب، انستغرام، فيسبوك).\\n     • يستوعب حتى 5,000 محادثة شهرياً.\\n     • أتمتة إغلاق المبيعات وتأكيد طلبات الزبائن.\\n     • ربط مباشر مع تقويمك أو نظام الإدارة والشيت.\\n     • تقارير أداء المحادثات ونسبة التحويل والمبيعات.\\n     • دعم فني مخصص وأولوية الاستجابة والخدمة.\\n\\n  3. خطة النخبة (للعيادات والمؤسسات والشركات الكبرى):\\n     • موظفو مبيعات ذكيون ومحادثات غير محدودة كلياً.\\n     • تدريب مخصص وتوجيه سيناريوهات البيع المعقدة والتفصيلية.\\n     • ربط API مخصص وأنظمة CRM وإدارة المخازن والشركات.\\n     • سيرفرات فائقة السرعة مع ضمان تشغيل 99.9%.\\n     • مدير حساب مخصص + دعم فني مباشر 24/7.\\n\\nالأسئلة الشائعة والأجوبة المعتمدة (210 سؤال وجواب):\\n- **س:** شنو خدمتكم بالضبط؟\\n  **ج:** إحنا شركة متخصصة نربط أتمتة وتلقائية لعملك باستخدام الذكاء الاصطناعي نبني لك بوت ذكي يرد على الزبائن فوراً، يدير المبيعات، ويجاوب على كل استفساراتهم 24/7.\\n- **س:** شنو يعني أتمتة الذكاء الاصطناعي؟\\n  **ج:** يعني نحول العمليات اليدوية المكررة في ردود الزبائن وتنظيم الطلبات إلى سيستم آلي يشتغل وحده بالذكاء الاصطناعي بدون ما تحتاج موظف يگعد يقرا ويرد يدوي.\\n- **س:** شلون الأتمتة تزيد مبيعاتي؟\\n  **ج:** تزيد المبيعات لأنها تقدم رد فوري خلال ثواني بأي وقت (حتى بالليل)، وتصفي الزبائن المهتمين، وتمنع ضياع الفرص من التأخير بتقديم الإجابات.\\n- **س:** شنو الفرق بينكم وبين البوتات القديمة؟\\n  **ج:** البوتات القديمة تطلب تضغط أزرار محددة وقوائم معقدة، بينما بوتنا مصمم بذكا اصطناعي يفهم الكلام الحر والحجي الطبيعي باللهجة العراقية ويرد مثل الموظف الحقيقي.\\n- **س:** هل ينفع النظام لمحل صغير لو بس للشركات الكبيرة؟\\n  **ج:** ينفع لكل أنواع الأعمال؛ المحل الصغير يخفف عنه الجهد ويخليه يبين محترف، والشركة الكبيرة يساعدها تجاوب آلاف الزبائن بنفس الوقت بدون تأخير.\\n- **س:** هل البوت يغني عن موظف خدمة العملاء بالكامل؟\\n  **ج:** البوت يشيل عنك 80% من الأسئلة المكررة والروتينية، والموظف البشري يتفرغ للمهام المعقدة أو الحالات الخاصة.\\n- **س:** شنو المشاكل اللي تحلها الأتمتة بعملي؟\\n  **ج:** تحل مشكلة تأخير الرد، نسيان متابعة الزبائن، خطأ تسجيل بيانات الطلبات، وضغط العمل في مواسم الزخم.\\n- **س:** هل يقدر البوت يتحمل آلاف الرسائل بنفس الوقت؟\\n  **ج:** نعم، النظام مصمم يتعامل ويا آلاف المحادثات بنفس الثانية بدون ما يهنك أو يتأخر بالرد.\\n- **س:** شنو يضمن لي إن البوت ما ينطي معلومات غلط؟\\n  **ج:** نغذيه بقاعدة بيانات دقيقة خاصة بشغلك فقط، ونحدد له تعليمات صارمة (Guardrails) تمنعه يفتي من عنده خارج المعلومات المعتمدة.\\n- **س:** هل يبين الرد كأنه آلي ومصنوع لو طبيعي؟\\n  **ج:** الرد يبين طبيعي جداً وسلس، وتقدر تبرمجه ينطق بأسلوب ونبرة براندك (صديق، رسمي، دافئ).\\n- **س:** هل أكدر استخدم البوت لحجز المواعيد؟\\n  **ج:** نعم، البوت يقدر يعرض الأوقات المتاحة، ياخذ معلومات الزبون، ويثبت الحجز تلقائياً على الكاليندر أو الشيت.\\n- **س:** شلون يقدر البوت يجذب الزبون المهتم (Lead generation)؟\\n  **ج:** يسأل الزبون أسئلة ذكية لتحديد احتياجه، وياخذ اسمه ورقم تلفونه وموقعه حتى ينقلها لفريق مبيعاتك مباشرة.\\n- **س:** هل ينفع السيستم للعيادات والمراكز الطبية؟\\n  **ج:** نعم جداً، يقدر يجاوب على أسئلة الخدمات، أسعار الكشفية، مواعيد الأطباء، وتأكيد الحجوزات آلياً.\\n- **س:** هل ينفع للمطاعم والشركات الخدمية؟\\n  **ج:** بالتأكيد، يقدر يعرض المنيو، ياخذ الطلبات بالتفصيل، يحدد عنوان التوصيل، ويحسب التكلفة الإجمالية.\\n- **س:** هل البوت يقدر يتابع الزبون اللي يترك السلة وما يشتري؟\\n  **ج:** نعم، يقدر يدز رسالة تذكيرية آلياً بعد وقت محدد للزبون اللي سأل عن منتج وما كمل الشراء.\\n- **س:** شنو الفائدة من جمع بيانات الزبائن من خلال البوت؟\\n  **ج:** تصير عندك قاعدة بيانات دقيقة لزبائنك تقدر تستغلها بعدين بإعادة الاستهداف وإرسال العروض الجديدة.\\n- **س:** هل البوت يشتغل بأيام العطل والأعياد؟\\n  **ج:** نعم، يشتغل 24 ساعة باليوم، 365 يوم بالسنة بدون أي عطلة.\\n- **س:** هل أكدر اسوي البوت يجاوب بلغات متعددة غير اللهجة العراقية؟\\n  **ج:** نعم، يقدر يجاوب بالعربي الفصحى، الإنجليزي، أو أي لغة ثانية حسب رغبة زبائنك.\\n- **س:** شنو تأثير الرد السريع على تقييم الصفحة؟\\n  **ج:** يزيد من معدل التفاعل (Response Rate) ويخلي منصات التواصل ترشح صفحتك وتصعدها للجمهور أكثر.\\n- **س:** شلون أضمن إن استثماري بالنظام راح يرجع لي أرباح؟\\n  **ج:** من خلال توفير رواتب موظفين إضافيين، وتكليل نسبة الزبائن المفقودين بسبب التأخير، وزيادة المبيعات المباشرة.\\n- **س:** هل الأتمتة تساعدني بتوسيع شغلي؟\\n  **ج:** نعم، لأنك تقدر تستقبل أضعاف الزبائن بدون ما تضطر تضاعف عدد كادرك الخدمي بنفس النسبة.\\n- **س:** شنو أحدث الميزات اللي تقدموها بالنظام؟\\n  **ج:** إمكانية قراءة الصور والملفات، تحليل صوت الزبون، والربط الذكي ويا الأنظمة الخارجية بـ APIs.\\n- **س:** هل البوت يقدر يحلل تقييمات الزبائن؟\\n  **ج:** نعم، يقدر يكتشف الزبون الزعلان أو الممنون ويرسل تقارير فورية لسرعة المعالجة.\\n- **س:** هل يحتاج الزبون ينزل تطبيق خاص حتى يحجي ويا البوت؟\\n  **ج:** لا أبداً، يراسلكم على نفس منصاتكم الاعتيادية مثل واتساب أو إنستغرام.\\n- **س:** شلون تبدأ أول خطوة وياكم؟\\n  **ج:** تحدد مكالمة استكشافية نفهم بيها شغلك، ونبني لك خطة الأتمتة المناسبة.\\n- **س:** هل تقدمون تجربة لعمل سابق؟\\n  **ج:** نعم، تقدر تراويك أمثلة ونماذج أنظمة شغالين عليها لعملاء سابقين بقطاعات مختلفة.\\n- **س:** هل البوت يتعلم بمرور الوقت؟\\n  **ج:** نعم، من خلال مراجعة المحادثات وتحديث البيانات، يصير البوت أذكى وأدق بالردود.\\n- **س:** هل البوت يقدر يسوي خصومات تلقائية للزبون المميز؟\\n  **ج:** نعم، إذا كان مربوط بداتا الزبائن ويتحقق من عدد طلباته السابقة.\\n- **س:** شنو الفرق بينكم وبين شركات التسويق الاعتيادية؟\\n  **ج:** إحنا نركز على البنية التحتية التقنية والأتمتة الذكية مو بس إعلانات وتصاميم.\\n- **س:** هل النظام يقلل من نسبة الأخطاء البشرية بالتجهيز؟\\n  **ج:** نعم، لأن البيانات تتسجل بالسيستم آلياً بدون الحاجة للنقل اليدوي وتخبيص الأرقام.\\n- **س:** هل البوت يتفاعل ويا التعليقات بالبوستات لو بس بالخاص؟\\n  **ج:** يقدر يرد على التعليقات بالعام، ويدز تفاصيل المنتج للزبون بالخاص بنفس اللحظة.\\n- **س:** شلون أضمن إن العميل ما ينزعج من فكرة إنه يحجي ويا روبوت؟\\n  **ج:** البوت يجيب بأسلوب بشري جداً ومباشر، وفي حال احتاج الزبون موظف يتيح له التحويل فوراً.\\n- **س:** هل أقدر أصنف الزبائن حسب اهتمامهم؟\\n  **ج:** نعم، البوت يضيف تاغات (Tags) لكل زبون (مثل: مهتم بالجملة، مهتم بالمفرد، زبون دائم).\\n- **س:** شنو يصير إذا الزبون دز رسالة صوتية (فويس)؟\\n  **ج:** البوت يقدر يحول الفويس إلى نص قراءة بالذكاء الاصطناعي ويفهمه ويجاوب عليه طبيعي.\\n- **س:** هل يقدر البوت يحلل صور المنتجات اللي يدزها الزبون؟\\n  **ج:** نعم، يقدر يكتشف صورة المنتج اللي يدزها الزبون ويقول له هذا متوفر لو لا وسعره.\\n- **س:** على يا منصات يقدر يشتغل البوت؟\\n  **ج:** تربطه على واتساب (WhatsApp Business API)، إنستغرام دايركت، فيسبوك ماسنجر، وتيليجرام.\\n- **س:** هل يتربط البوت ويا الواتساب الاعتيادي لو يحتاج API؟\\n  **ج:** يفضل الربط ويا Official WhatsApp Business API لضمان الأمان وعدم الحظر واستقرار الخدمة.\\n- **س:** هل أكدر أربط البوت ويا جداول جوجل (Google Sheets)؟\\n  **ج:** نعم، يقدر البوت يقرا أسعار المنتجات ويضيف طلبات الزبائن ومعلوماتهم بشيت جوجل لحظياً.\\n- **س:** هل يتربط البوت ويا المتجر الإلكتروني مثل (Shopify / زد / سلة)؟\\n  **ج:** نعم، تربطه مباشر ويا المتجر لسحب المنتجات، التحقق من المخزون، وتتبع حالة الطلبات.\\n- **س:** هل يقدر البوت يقرا داتا من سيستم إدارة المخازن (ERP)؟\\n  **ج:** نعم، عبر بروتوكولات الربط APIs يقدر يتصل بأي نظام مخزني متاح.\\n- **س:** هل يتربط ويا نظام CRM لإدارة العملاء؟\\n  **ج:** بالتأكيد، يتربط ويا HubSpot, Zoho, Salesforce أو أي CRM تعتمده لتحديث بيانات الزبائن.\\n- **س:** شنو المنصات الذكية اللي تستخدموها ببناء البوت؟\\n  **ج:** نستخدم تقنيات حديثة ومتقدمة مثل n8n, Make, OpenAI APIs, Claude و ManyChat حسب تعقيد النظام.\\n- **س:** هل البوت يشتغل على منصة وحدة لو عدة منصات بنفس الوقت؟\\n  **ج:** يقدر يشتغل على كل منصاتك بنفس الوقت وتدار كلها من مكان واحد وصندوق وارد موحد.\\n- **س:** شنو منصة Inbox الموحدة؟\\n  **ج:** لوحة تحكم وحدة تنجمع بيها رسائل واتساب، إنستغرام، وماسنجر حتى موظفينك يردون منها بسلاسة.\\n- **س:** هل أقدر أربط البوت ويا بوابة دفع إلكتروني مثل (زين كاش / كارد)؟\\n  **ج:** نعم، البوت يقدر يدز رابط دفع آمن للزبون ويتحقق من نجاح العملية قبل تثبيت الطلب.\\n- **س:** شنو يصير إذا السيرفر مال البوت توقف؟\\n  **ج:** أنظمتنا معتمدة على سيرفرات سحابية عالية الاعتمادية (AWS / Google Cloud) مع نسبة تشغيل 99.9%.\\n- **س:** هل أقدر أدز رسائل جماعية للزبائن (Broadcast)؟\\n  **ج:** نعم، عبر الواتساب API تقدر تدز حملات إشعارية للزبائن المشتركين بدون خطر الحظر.\\n- **س:** هل يتيح الربط تتبع المبيعات الجاية من الإعلانات؟\\n  **ج:** نعم، يتربط ويا Meta Pixel و Google Analytics لمعرفة الإعلان اللي إجا منه الزبون.\\n- **س:** هل البوت يقدر يربط ويا نظام إدارة التوصيل؟\\n  **ج:** نعم، يتربط ويا شركات التوصيل لإرسال بيانات الطلب وإنشاء البوليسة تلقائياً.\\n- **س:** هل أكدر اسوي البوت يقرأ ملفات PDF لو كاتلوجات؟\\n  **ج:** نعم، تغذيه بالكاتلوجات والملفات وهو يحللها ويجاوب على أي تفصيلة مذكورة بيها.\\n- **س:** هل الربط التقني يأثر على سرعة الصفحة أو الحساب؟\\n  **ج:** لا أبداً، الربط يتم برمجياً عبر السيرفرات الخارجية دون أي تأثير على أداء حساباتك.\\n- **س:** شنو تحتاج من طرفنا حتى تبدأ تربط التقنيات؟\\n  **ج:** تحتاج صلاحيات وصول أدمن للحسابات (Meta Business, WhatsApp, Google Account) لبدء الضبط.\\n- **س:** هل أقدر أغير السيرفرات أو البيئة البرمجية بعدين؟\\n  **ج:** نعم، البنية التقنية اللي نبنيها مرنة ونقدر ننقلها لأي بيئة استضافة ثانية.\\n- **س:** هل يتربط البوت ويا الإيميل الرسمي؟\\n  **ج:** نعم، يقدر يدز ملخص الطلبات أو التقارير الفورية للإيميل الخاص بك أو بكادرك.\\n- **س:** شلون البوت يتعامل ويا التنسيقات والروابط؟\\n  **ج:** يدز النصوص مفرقة وياها روابط شغالة، صور منتجات، وأزرار تفاعلية للمسات سهلة.\\n- **س:** هل أقدر أدخل أكواد خوارزميات خاصة بشركتي بالسيستم؟\\n  **ج:** نعم، تقدر تبرمج منطق خاص (Custom Code) بالـ Python أو JS ضمن خطوط الأتمتة.\\n- **س:** هل يدعم البوت قراءة جداول Excel المرفوعة؟\\n  **ج:** نعم، يقدر يحلل جداول البيانات ويستخرج منها الأسعار والمواصفات بسهولة.\\n- **س:** هل يقدر البوت يدز ملفات فيديو لو بصمات صوتية جاهزة؟\\n  **ج:** نعم، يقدر يدز وسائط متعددة (صور، فيديوات توضيحية، ملفات PDF، فويسات) حسب مسار المحادثة.\\n- **س:** شنو متطلبات ربط واتساب API رسمي؟\\n  **ج:** يحتاج سجل تجاري أو إثبات نشاط، رقم هاتف مخصص، وحساب فيسبوك بيزنس مفعل.\\n- **س:** هل إنتو تكملون إجراءات التوثيق بالصح الأخضر لـ الواتساب؟\\n  **ج:** نعم، نساعدكم بكل خطوات التقديم للحصول على التوثيق الرسمي بالصح الأخضر.\\n- **س:** هل البوت يدعم الـ Webhooks؟\\n  **ج:** نعم، يرسل ويستقبل إشعارات فورية عبر الـ Webhooks لتحديث الأجهزة والأنظمة الثانوية.\\n- **س:** هل أقدر أربط البوت ويا نظام POS للمحلات الفعلية؟\\n  **ج:** نعم، إذا كان نظام الـ POS يدعم بروتوكولات الاتصال الخارجية APIs.\\n- **س:** هل يقدر البوت يحلل روابط الكوكل ماب اللي يدزها الزبون؟\\n  **ج:** نعم، يقدر ياخذ رابط الموقع ويستخرج منه عنوان الزبون التقريبي لتسهيل التوصيل.\\n- **س:** هل يتربط البوت ويا حسابات موظفين المبيعات؟\\n  **ج:** نعم، يقدر يوزع المحادثات آلياً على الموظفين المتاحين بالسيستم (Round Robin).\\n- **س:** شنو حجم البيانات اللي يقدر يخزنها النظام؟\\n  **ج:** سعة تخزينية مفتوحة تعتمد على قاعدة البيانات المربوطة بالسحابة.\\n- **س:** هل البوت يتربط ويا تقويم كوكل (Google Calendar)؟\\n  **ج:** نعم، لحجز المواعيد وتنظيم جدول المراجعات آلياً بدون تضارب بالوقت.\\n- **س:** هل يقدر البوت يدز إشعارات SMS للزبون؟\\n  **ج:** نعم، يتربط ويا بوابات الـ SMS لإرسال رموز التحقق أو كود التتبع.\\n- **س:** هل السيستم يدعم ربط أكثر من فرع للشركة؟\\n  **ج:** نعم، يقدر يوجه الزبون للفرع الأقرب له بناءً على موقعه أو اختياره.\\n- **س:** هل يتربط البوت ويا تطبيقات الموبايل الخاصة بشركتكم؟\\n  **ج:** نعم، يمكن بناء API مخصص يدير التواصل بين البوت وتطبيق الموبايل.\\n- **س:** هل السيستم قابل للتوسع مستقبلاً (Scalable)؟\\n  **ج:** نعم، مصمم بهيكلية سهلة التوسع لتغطية أي ميزات أو منصات جديدة تضيفها مستقبلاً.\\n- **س:** شنو يصير إذا الزبون طلب يراسل شخص حقيقي؟\\n  **ج:** البوت يتعرف على الطلب فوراً، يوقف الرد الآلي، ويحول المحادثة لموظف خدمة العملاء مع تنبيه برامجي.\\n- **س:** شلون الموظف يعلم إن البوت حول له محادثة؟\\n  **ج:** يجيه إشعار فوراً على الموبايل لو الحاسبة عبر لوحة التحكم الموحدة أو تطبيق الواتساب.\\n- **س:** هل أكدر أطفي البوت عن زبون معين وأحجي وياه يدوي؟\\n  **ج:** نعم، بزر واحد تقدر توقف البوت عن محادثة معينة وتحجي وتكمل ويا الزبون يدوي.\\n- **س:** إذا الموظف كمل حجي ويا الزبون شلون يرجع البوت يشتغل؟\\n  **ج:** ببساطة يضغط زر إعادة تفعيل البوت، أو يترك المحادثة تتفعل آلياً بعد وقت محدد من عدم الرد.\\n- **س:** شلون نمنع البوت من الرد إذا كان الموظف أصلاً كاعد يحجي ويا الزبون؟\\n  **ج:** السيستم يكتشف تدخل الموظف ويثبط الردود الآلية تلقائياً لتجنب التضارب بالردود.\\n- **س:** هل البوت يعرف شوكت يكون الموظف أوفلاين لو بعطلة؟\\n  **ج:** نعم، يقدر يبلغ الزبون بأوقات الدوام الرسمية وياخذ رسالته ليرد عليها الموظف أول ما يداوم.\\n- **س:** شلون يتصرف البوت إذا الزبون غلط بالكلام لو كان زعلان؟\\n  **ج:** الذكاء الاصطناعي يحلل نبرة الزبون (Sentiment Analysis)، وإذا اكتشف غضب أو كلام غير لائق يحولها للمشرف مباشرة.\\n- **س:** هل أكدر اراجع المحادثات اللي يسويها البوت؟\\n  **ج:** نعم، عندك سجل كامل لكل المحادثات تقدر تراجعه وتراقبه بأي وقت لضمان الجودة.\\n- **س:** شنو الصلاحيات اللي تقدر تنطيها للموظفين بالسيستم؟\\n  **ج:** تقدر تحدد أدوار (Admins, Agents, Viewers) وكل موظف يشوف بس المحادثات أو الفروع المخصصة له.\\n- **س:** هل البوت يصنف المحادثات حسب الأهمية؟\\n  **ج:** نعم، يقدر يحط تاغات وتنبيهات ملونة للمحادثات العاجلة أو الطلبات الكبيرة.\\n- **س:** هل أقدر أعدل أجوبة البوت إذا شفت رد مو عاجبني؟\\n  **ج:** نعم، تقدر تدخل على لوحة التحكم وتحدث التعليمات أو الأسئلة الشائعة فوراً.\\n- **س:** شلون يوزع البوت المحادثات على الموظفين؟\\n  **ج:** يقدر يوزعها بالتساوي، أو حسب التخصص (مثل: مبيعات، صيانة، شكاوى).\\n- **س:** هل يقدر الموظف يدز نصوص جاهزة (Canned Responses) من خلال السيستم؟\\n  **ج:** نعم، السيستم يوفر مكتبة ردود سريعة للموظفين حتى يختصرون وقت الكتابة.\\n- **س:** شنو يصير إذا ماكو ولا موظف جاوب الزبون بعد التحويل؟\\n  **ج:** البوت يرجع يدز رسالة اعتذار لطيفة للزبون ويأكد له إن رسالته بجدول الأولوية وسيتم الرد قريباً.\\n- **س:** هل أقدر أسمح للبوت يجاوب بالليل بس، وبالنهار يشتغلون الموظفين؟\\n  **ج:** نعم، تقدر تحدد جدولة زمنية لتشغيل البوت بساعات معينة أو على مدار الساعة.\\n- **س:** شلون السيستم يحمي بيانات الزبائن من التسريب؟\\n  **ج:** البيانات تشفر بالكامل والصلاحيات معزولة، والنظام يلتزم بمعايير حماية البيانات الأهلية.\\n- **س:** هل أقدر أمنع البوت من الإجابة على أسئلة معينة؟\\n  **ج:** نعم، تدرج هذه الأسئلة ضمن القائمة الحمراء (Blacklist) ليتم تحويلها مباشرة للبشر.\\n- **س:** هل يقدر الموظف يضيف ملاحظات سرية داخل المحادثة؟\\n  **ج:** نعم، يقدر يكتب ملاحظات داخلية (Internal Notes) يشوفها الفريق بس والزبون ما يشوفها.\\n- **س:** شنو السجلات اللي تطلع لي عن أداء الموظفين؟\\n  **ج:** تقارير توضح سرعة رد الموظف، عدد المحادثات المغلقة، وتقييم رضا الزبائن.\\n- **س:** هل البوت يقدر يسوي استبيان رضا العملاء بعد إغلاق المحادثة؟\\n  **ج:** نعم، يدز تقييم من 5 نجوم آلياً بعد ما يكمل الموظف أو البوت خدمة الزبون.\\n- **س:** شلون يتعامل البوت ويا الحسابات الوهمية لو السبام؟\\n  **ج:** يقدر يكتشف الرسائل المكررة بسرعة وحظر المستخدم المسيء آلياً لتوفير الموارد.\\n- **س:** هل السيستم يقدر يرسل تنبيه على التليغرام للمدير بالحالات الحرجة؟\\n  **ج:** نعم، يقدر يدز إشعار فوري لكروب الإدارة إذا صار إلغاء طلب كبير أو شكوى قوية.\\n- **س:** هل يتغير أداء البوت حسب تصنيف الزبون؟\\n  **ج:** نعم، إذا كان الزبون VIP يقدر ينطيه أولوية بالتحويل للموظف أو عروض خاصة.\\n- **س:** هل تقدر تسجل مكالمات أو فويسات التحويل؟\\n  **ج:** نعم، الفويسات المتبادلة تتخزن بالسجل وتقدر تسمعها بأي وقت.\\n- **س:** شلون تضمن عدم ضياع أي محادثة محولة؟\\n  **ج:** وجود قسم (Unassigned) بالسيستم يجمع كل المحادثات المعلقة لحد ما يستلمها موظف.\\n- **س:** هل البوت يدعم التبديل بين الرد الآلي واليدوي بمسجات محددة؟\\n  **ج:** نعم، يقدر يجاوب على الأسئلة العامة، ومن يوصل لمرحلة الدفع يحول للإنبوكس لمسؤول المبيعات.\\n- **س:** هل يقدر البوت ينبه الموظف إذا الزبون صار له فترة ينتظر؟\\n  **ج:** نعم، السيستم يسوي تذكير للموظف إذا مرت 5 دقائق بدون رد على زبون محول.\\n- **س:** هل أكدر اسوي أوفورات خاصة يوزعها الموظف يدوياً من خلال السيستم؟\\n  **ج:** نعم، الموظف يقدر يرسل كوبونات الخصم والكتالوجات المخصصة من داخل لوحة التحكم.\\n- **س:** شلون السيستم يتعامل ويا الرسائل الترحيبية؟\\n  **ج:** يدز رسالة ترحيبية مشوقة فورية تفتح المجال للزبون يحدد خطوته الجاية بسهولة.\\n- **س:** هل أقدر أفتح لوحة التحكم من الموبايل؟\\n  **ج:** نعم، لوحة التحكم متوافقة ويا الموبايل ولها تطبيقات خاصة لأجهزة iOS و Android.\\n- **س:** هل السيستم يتطلب حاسبات بمواصفات عالية للموظفين؟\\n  **ج:** لا، يشتغل على أي متصفح إنترنت اعتيادي دون الحاجة لمتطلبات متقدمة.\\n- **س:** شلون البوت يتعامل ويا طلبات الإلغاء؟\\n  **ج:** ياخذ سبب الإلغاء، ويسجله بالسيستم، ويحوله للمشرف لمحاولة استعادة الزبون.\\n- **س:** هل أقدر أعين أكثر من مدير للنظام؟\\n  **ج:** نعم، تقدر تنطي صلاحيات أدمن كاملة لأكثر من شخص بالإدارة.\\n- **س:** هل السيستم يتتبع الجغرافي للزبون؟\\n  **ج:** إذا الزبون شارك موقعه (Location)، البوت يحلل الإحداثيات ويحدد الأقرب له.\\n- **س:** شنو يصير إذا الموظف أخطأ بالرد؟\\n  **ج:** المدير يقدر يعدل أو يحذف المحادثة ويصحح المسار، ويراقب سجل التعديلات.\\n- **س:** هل بيانات زبائني وشغلي بأمان وياكم؟\\n  **ج:** نعم، تطبق أعلى معايير التشفير (SSL-256 / AES) والبيانات تكون ملكك بالكامل ولا يتم مشاركتها أبداً.\\n- **س:** هل التكلفة تشمل حماية الحسابات من الحظر؟\\n  **ج:** نستخدم الأساليب الرسمية والـ APIs المعتمدة لتفادي الحظر تماماً على خلاف الطرق غير الرسمية.\\n- **س:** أين تتخزن البيانات والمعلومات؟\\n  **ج:** تتخزن على سيرفرات سحابية مؤمنة عالمياً (مثل AWS / Google Cloud) مع نسخ احتياطي دوري.\\n- **س:** هل أقدر أخذ نسخة احتياطية من داتا المحادثات؟\\n  **ج:** نعم، تقدر تصدر الداتا (Export) بأي وقت بصيغة CSV أو JSON أو Excel.\\n- **س:** منو يقدر يشوف بيانات زبائني؟\\n  **ج:** أنت وفريقك المصرح له بس. إحنا كفريق تطوير ما ندخل على الداتا إلا بطلب دعم فني منك.\\n- **س:** هل النظام يلتزم بقوانين حماية البيانات العامة (GDPR)؟\\n  **ج:** نعم، السيستم مصمم يحترم خصوصية المستخدمين ويوفر خيار حذف البيانات إذا طلب الزبون.\\n- **س:** شنو إجراءات الأمان للوحة التحكم؟\\n  **ج:** تسجيل دخول مؤمن، التحقق بخطوتين (2FA)، وتحديد الجلسات حسب الـ IP إذا أردت.\\n- **س:** هل البوت يقدر يخزن أرقام الكارتات أو البيانات الحساسة؟\\n  **ج:** لا، عمليات الدفع تتم عبر روابط خارجية لبوابات مرخصة، ولا يتم تخزين بيانات البطاقات بالسيستم.\\n- **س:** شنو يصير لداتاي إذا انتهى العقد وياكم؟\\n  **ج:** نسلمك كامل النسخ الاحتياطية ونحذفها نهائياً من سيرفرات الإعداد بناءً على طلبك.\\n- **س:** هل الأتمتة ممكن تسبب بطء بحساب الواتساب أو إنستغرام؟\\n  **ج:** لا، لأن الشغل كله يتم عبر السيرفرات السحابية ومنافذ الـ API الرسمية دون إجهاد تطبيق الموبايل.\\n- **س:** هل ينحظر رقم الواتساب عند ارسال برودكاست؟\\n  **ج:** إذا استخدمت واتساب API الرسمي واستهدفت زبائن موافقين ماكو أي خطر للحظر.\\n- **س:** شلون تضمنون عدم تسريب تعليمات البوت الذكي (Prompt Injection)؟\\n  **ج:** نضع حواجز برمجية قوية تمنع المستغلين من استخراج الـ System Prompt أو التلاعب بالذكاء.\\n- **س:** هل النظام يحمي من هجمات الاختراق (DDoS)؟\\n  **ج:** نعم، السيرفرات السحابية مجهزة بنظم حماية تلقائية تمنع هذه الهجمات وتضمن استمرار الخدمة.\\n- **س:** هل البوت يمسح المحادثات القديمة؟\\n  **ج:** تتخزن المحادثات حسب سعة الباقة، وتقدر تبرمجه يؤرشف أو يمسح الداتا بعد مرور فترة معينة.\\n- **س:** هل أقدر أجبر السيستم يشتغل بس داخل العراق لتفادي الاختراقات الخارجية؟\\n  **ج:** نعم، تقدر تحدد النطاق الجغرافي للوصول للوحة التحكم بحسب الدولة.\\n- **س:** شنو ضمان عدم تداخل بيانات عميل ويا عميل ثاني؟\\n  **ج:** كل شركة لها بيئة معزولة بالكامل (Multi-tenant Architecture) وقاعدة بيانات مستقلة.\\n- **س:** هل يرسل السيستم تنبيهات عند محاولة دخول غير مصرح بها؟\\n  **ج:** نعم، يوصل إشعار فوري للأدمن عند أي محاولة دخول غريبة أو من جهاز جديد.\\n- **س:** هل أكدر أغير كلمات المرور وصلاحيات الوصول بسهولة؟\\n  **ج:** نعم، من لوحة الأدمن تقدر تضيف أو تلغي وصول أي موظف بثواني معدودة.\\n- **س:** هل يتطلب السيستم برامج حماية خاصة بأجهزتنا؟\\n  **ج:** لا، يكفي متصفح حديث، والأمان يتم التكفل به من ناحية السيرفرات سحابياً.\\n- **س:** كيف يتم التعامل مع طلبات الزبائن بحذف أرقامهم؟\\n  **ج:** البوت يوفر أمر تلقائي (مثل: إلغاء الاشتراك) يمسح الرقم من قائمة الإشعارات فوراً.\\n- **س:** هل البوت يقدر يسوي فلترة للرسائل الملغومة أو الفيروسات؟\\n  **ج:** نعم، يحلل المرفقات ويمنع فتح أو تشغيل أي ملف مشبوه يبعثه المستخدم.\\n- **س:** هل يتم توثيق كل عملية تعديل بالنظام؟\\n  **ج:** نعم، يوجد سجل أحداث كامل (Audit Log) يسجل كل حركة قام بها أي مستخدم بالنظام.\\n- **س:** هل السيستم مشمول بضمان استعادة الخدمة عند الكوارث (Disaster Recovery)؟\\n  **ج:** نعم، نأخذ نسخ احتياطية يومية تمكنا من استعادة السيستم كاملاً بوقت قياسي.\\n- **س:** هل يتطلب النظام موافقة الزبون قبل الشروع بالمحادثة؟\\n  **ج:** تقدر تفعل خيار رسالة الشروط والخصوصية في أول محادثة للالتزام القانوني.\\n- **س:** هل يمكن منع الموظفين من تصدير داتا العملاء؟\\n  **ج:** نعم، خيار التصدير (Export) يكون محصوراً بالأدمن الرئيسي فقط لحماية الداتا.\\n- **س:** شلون تمنعون البوت من التفاعل ويا البوتات الثانية؟\\n  **ج:** النظام يكتشف السلوك الآلي للحسابات المقابلة ويوقف التفاعل لتجنب الحلقة المفرغة.\\n- **س:** هل النظام مرخص تقنياً؟\\n  **ج:** نعم، نستخدم أدوات ومكتبات مرخصة ورسمية 100% دون أي برمجيات مقرصنة.\\n- **س:** ما هي سياسة حماية أسرار العمل (NDA)؟\\n  **ج:** نوقع وياك اتفاقية عدم إفشاء أسرار رسمية لحماية تفاصيل عملك وأرقام مبيعاتك.\\n- **س:** هل البيانات تشفر أثناء النقل والتخزين؟\\n  **ج:** نعم، تشفير كامل أثناء النقل (In-Transit) وأثناء الاستقرار (At-Rest).\\n- **س:** هل أقدر أحظر أرقام أو حسابات زبائن مسيئين؟\\n  **ج:** نعم، يوجد نظام Blocklist لحظر أي زبون من التفاعل ويا البوت مستقبلاً.\\n- **س:** شلون يتم التحقق من صحة أرقام الهواتف؟\\n  **ج:** البوت يقدر يحلل صيغة الرقم ويدز كود OTP للتحقق إذا استدعى الأمر.\\n- **س:** هل البوت يقدر يستشف محاولات الاحتيال؟\\n  **ج:** نعم، يكتشف السلوكيات الغريبة ويبلغ عنها فريق الأمان عندك.\\n- **س:** هل السيستم متوافق مع معايير الأمان البنكية؟\\n  **ج:** نستخدم بروتوكولات مطابقة للـ PCI-DSS عند التكامل مع بوابات الدفع.\\n- **س:** هل أقدر أتتبع السجل التاريخي لتعديل الأسعار بالبوت؟\\n  **ج:** نعم، كل تغيير بقاعدة البيانات يتسجل بالزمان واسم الشخص اللي عدل.\\n- **س:** ماذا يحدث عند تغيير كلمة سر حساب الواتساب أو فيسبوك؟\\n  **ج:** تحتاج بس تعيد ربط الـ Token من لوحة التحكم لتأمين الاستمرارية.\\n- **س:** شلون تحسبون كلفة بناء نظام الأتمتة؟\\n  **ج:** تحسب التكلفة بناءً على عدد المنصات، تعقيد مسارات العمل (Workflows)، ومدى الربط المطلوب مع الأنظمة الخارجية.\\n- **س:** هل الدفع يكون مرة وحدة لو اشتراك شهري؟\\n  **ج:** النظام يتكون من كلفة إعداد وتأسيس تدفع مرة واحدة بالبداية، واشتراك شهري بسيط يغطي الاستضافة والذكاء الاصطناعي والدعم.\\n- **س:** شنو يغطي الاشتراك الشهري؟\\n  **ج:** يغطي كلفة استهلاك الذكاء الاصطناعي (OpenAI/Claude Tokens)، استضافة السيرفرات السحابية، الصيانة، والدعم الفني.\\n- **س:** هل توجد رسوم خفية بعد البدء؟\\n  **ج:** لا، كل التكاليف تكون موضحة بعرض السعر قبل توقيع العقد بدون أي رسوم مفاجئة.\\n- **س:** هل تختلف التكلفة إذا زاد عدد الرسائل؟\\n  **ج:** الباقات الأساسية تشمل حد معين من الرسائل، وإذا تجاوزتها يتم حساب الزيادة بحسب استهلاك التوكنات بأسعار رمزية.\\n- **س:** هل أقدر أرقي الباقة بعدين إذا كبر شغلي؟\\n  **ج:** نعم، تقدر تنتقل لباقة أعلى بأي وقت ويتم احتساب الفارق بس.\\n- **س:** شنو يصير إذا ردت ألغي الاشتراك؟\\n  **ج:** تقدر تلغي الاشتراك الشهري بأي وقت، ونسلمك داتا شغلك كاملة دون أي التزام إجباري.\\n- **س:** هل تقدمون خصم عند الدفع السنوي؟\\n  **ج:** نعم، نقدم خصم يصل إلى 20% عند دفع اشتراك الصيانة والاستضافة سنوياً مقدماً.\\n- **س:** هل مكالمة الاستشارة الأولى مجانية؟\\n  **ج:** نعم، الجلسة الاستكشافية الأولى مجانية 100% لتحليل احتياجات عملك وتقديم النصيحة.\\n- **س:** شنو طرق الدفع المتاحة عندكم؟\\n  **ج:** تدعم الدفع عبر زين كاش، الكروت البنكية، تحويل الحوالات، أو الدفع النقدي بالمكتب.\\n- **س:** هل التكلفة تشمل تدريب الكادر مالتي؟\\n  **ج:** نعم، كل الباقات تشمل جلسات تدريبية لكادرك لضمان استخدام لوحة التحكم بكفاءة.\\n- **س:** هل سعر رسائل واتساب API داخل ضمن الباقة؟\\n  **ج:** رسائل الواتساب الرسمية تحسب حسب تسعيرة شركة Meta وتدفع لها مباشرة أو تربطها بكارتك.\\n- **س:** هل أقدر أطلب إضافة ميزة جديدة للبوت بعدين وبكام؟\\n  **ج:** نعم، أي ميزة جديدة يتم تقييم جهدها وتنطيك سعرها المقطوع قبل البدء بتنفيذها.\\n- **س:** شنو ضمان استرجاع الأموال عند عدم الرضا؟\\n  **ج:** نقدم مرحلة اختبار وتدريب (Testing Phase) تراجع بيها البوت قبل الإطلاق الفعلي والاعتماد.\\n- **س:** هل السعر يفرق إذا ردت البوت بـ 3 لغات؟\\n  **ج:** تضاف تكلفة بسيطة لتهيئة وقواعد بيانات اللغات الإضافية.\\n- **س:** هل تفرق التكلفة بين ربط شيت كوكل وبين ربط سيستم عملاق؟\\n  **ج:** نعم، ربط جداول كوكل يكون أبسط وأقل تكلفة من ربط أنظمة الـ ERP المعقدة.\\n- **س:** هل أقدر أدفع الأقساط على مراحل؟\\n  **ج:** نعم، دفعات التأسيس تقسم عادة (50% عند البدء، 50% عند التسليم والاختبار).\\n- **س:** هل تقدمون أسعار خاصة للمؤسسات الخيرية لو الناشئة؟\\n  **ج:** نعم، نقدم باقات مدعومة للشركات الناشئة الصغيرة والمشاريع الإنسانية.\\n- **س:** شنو يعتمد سعر الـ Tokens بالذكاء الاصطناعي؟\\n  **ج:** يعتمد على طول المحادثات ومدى تعقيد النموذج المستخدم (GPT-4o vs GPT-4o-mini).\\n- **س:** هل يوفر السيستم تقرير شهري بالاستهلاك والمصاريف؟\\n  **ج:** نعم، لوحة التحكم توضح لك بلمسة شفافة الاستهلاك اليومي والشهري والتكاليف بالضبط.\\n- **س:** هل أقدر أربط مفتاح الـ API الخاص بي (OpenAI Key) لتوفير التكلفة؟\\n  **ج:** نعم، تقدر تربط الـ API Key الخاص بك مباشرة لتتحكم بمصاريف الاستهلاك بنفسك.\\n- **س:** إذا توقف الدفع الشهري شنو يصير للبوت؟\\n  **ج:** يتوقف الرد الآلي مؤقتاً لحين تجديد الاشتراك مع الحفاظ الكامل على كافة البيانات والإعدادات.\\n- **س:** هل نحتاج نشتري سيرفرات خاصة بنا؟\\n  **ج:** لا، السيرفرات سحابية ومدرجة ضمن خدماتنا وما تحتاج تشتري أي أجهزة إضافية.\\n- **س:** هل السعر شامل التحديثات الدورية للنظام؟\\n  **ج:** نعم، التحديثات الأمنية وتطوير استقرار السيستم مشمولة بالاشتراك الشهري.\\n- **س:** هل أكدر اسوي إعادة هيكلة للسيستم بعد فترة بدون كلفة كبيرة؟\\n  **ج:** التعديلات البسيطة مشمولة بالدعم والتغييرات الجوهرية تقدم بأسعار مخفضة للعملاء.\\n- **س:** شلون أضمن عدم استغلال استهلاك الذكاء الاصطناعي من قبل المنافسين؟\\n  **ج:** نضع حدود استهلاك لكل مستخدم (Rate Limiting) لمنع الإفراط أو الاستنزاف المالي.\\n- **س:** هل تختلف كلفة البوت إذا كان بس يرد لو ياخذ طلبات؟\\n  **ج:** نعم، البوت الشامل لعمليات المبيعات والربط يحتاج هندسة مسارات أكثر فتكون كلفته أعلى كليلاً.\\n- **س:** هل يوجد عقد رسمي يضمن حقوق الطرفين؟\\n  **ج:** نعم، نوقع عقد عمل رسمي يوضح التفاصيل التقنية، التكاليف، الجدول الزمني، والتزامات الدعم.\\n- **س:** هل أقدر أشتري الكود المصدري (Source Code) بالكامل؟\\n  **ج:** نعم، يتاح خيار شراء الكود والملكية الفكرية الكاملة للنظام ضمن باقة خاصة (Enterprise).\\n- **س:** شنو يصير إذا زاد عدد موظفين المبيعات عندي بالسيستم؟\\n  **ج:** تقدر تضيف موظفين جدد للباقة، وتكلفة الحسابات الإضافية تكون رمزية جداً.\\n- **س:** هل يوفر النظام فترة تجريبية (Demo)؟\\n  **ج:** تصمم لك عرضاً توضيحياً حياً (Live Demo) يراويك شلون يشتغل البوت بقطاع عملك قبل التعاقد.\\n- **س:** هل الاستشارات التقنية بعد التسليم بفلوس؟\\n  **ج:** الاستشارات القصيرة والنصائح ضمن باقة الدعم تكون مجانية تماماً.\\n- **س:** كيف تضمنون أفضل قيمة مقابل السعر؟\\n  **ج:** نركز على بناء نظام يقلل مصاريفك التشغيلية ويزيد أرباحك ليكون العائد على الاستثمار (ROI) سريع جداً.\\n- **س:** هل توجد رسوم إضافية عند تحديث نماذج الذكاء الاصطناعي لنسخ أحدث؟\\n  **ج:** نحدث للنظام الأحدث تلقائياً دون رسوم إضافية طالما الاستهلاك ضمن حدود الباقة.\\n- **س:** ما هي التكلفة المتوقعة لحسابات واتساب الرسمية؟\\n  **ج:** Meta تتيح 1,000 محادثة مجانية شهرياً، وما زاد عنها يحسب بفلسات بسيطة حسب الدولة.\\n- **س:** شلون تقدم طلب دعم فني إذا صار خلل؟\\n  **ج:** تتصل بينا مباشر أو تدز طلب عبر قناة الدعم المخصصة لشركتك على واتساب / تليغرام وتتفتح تكت فورية.\\n- **س:** شكد وقت الاستجابة لطلبات الصيانة؟\\n  **ج:** فريق الدعم يستجيب للحالات الحرجة خلال أقل من 30 دقيقة، وللاستفسارات العادية خلال ساعتين.\\n- **س:** شلون طريقة التسليم والخطوات التأسيسية؟\\n  **ج:** 1. تحليل المتطلبات، 2. تصميم المسارات والداتا، 3. البرمجة والربط، 4. الاختبار والتدريب، 5. الإطلاق والاعتماد.\\n- **س:** كم يستغرق بناء السيستم بالكامل؟\\n  **ج:** يستغرق المتوسط بين أسبوعين إلى 4 أسابيع حسب حجم وتداخل النظام مع الأنظمة الخارجية.\\n- **س:** منو يكتب الأجوبة والداتا اللي يتعلمها البوت؟\\n  **ج:** إحنا نساعدك بصياغتها وهيكلتها بناءً على الأسئلة والملفات اللي تزودنا بيها عن عملك.\\n- **س:** هل تدربون الفريق مالتي على الاستخدام؟\\n  **ج:** نعم، نسوي ورشة تدريبية أونلاين أو بمكتبكم مع تقديم فيديوات تعليمية مخصصة لشغلك.\\n- **س:** شنو يصير إذا ردت أغير بالسيستم بعد التسليم؟\\n  **ج:** تقدر تحدد التعديلات، إذا كانت بسيطة تتنفذ فوراً بالدعم الفني، وإذا كبيرة ندرجها بجدول التطوير.\\n- **س:** هل توفرون تقارير أداء دورية للنظام؟\\n  **ج:** نعم، يدز لك السيستم تقرير أسبوعي / شهري بمدى تفاعل الزبائن، أكثر الأسئلة، ومعدل تحويل المبيعات.\\n- **س:** هل البوت يحتاج مراقبة مستمرة؟\\n  **ج:** في الأسابيع الأولى تراقب النظام وياك يومياً، وبعد استقراره يشتغل بآلية عالية بدون حاجة لتدخل.\\n- **س:** شلون تضمن البوت يستوعب المنتجات الجديدة فوراً؟\\n  **ج:** بجداول البيانات المربوطة، بس تضيف المنتجات بالشيت البوت يبدأ يوظفها بالردود بنفس اللحظة.\\n- **س:** هل تقدمون خدمة كتابة المحتوى والردود الذكية؟\\n  **ج:** نعم، نراجع الردود ونحسن صياغتها لتكون أكثر جاذبية وتسويقية للزبائن.\\n- **س:** شنو الإجراء إذا فيسبوك أو واتساب غيروا سياساتهم؟\\n  **ج:** فريقنا التقني يتابع التحديثات ويعدل الأكواد آلياً لضمان استمرار عملك دون انقطاع.\\n- **س:** هل يوفر السيستم اختبار أسلوب الردود (A/B Testing)؟\\n  **ج:** نعم، تقدر تختبر نصوص ردود مختلفة لتحديد أي نص يقنع الزبون بالشراء أكثر.\\n- **س:** كيف يتم التأكد من عدم وجود أخطاء لغوية بالردود؟\\n  **ج:** الذكاء الاصطناعي مدرب على قواعد اللغة، ونضبط المدخلات النصية لمنع أي كسور لغوية.\\n- **س:** هل يمكن إضافة ميزات الذكاء الاصطناعي الصوتي مستقبلاً؟\\n  **ج:** نعم، النظام مجهز للربط مع أنظمة التفاعل الصوتي (Voice Bots) أول ما تطلبها.\\n- **س:** هل يتيح النظام قياس مدى رضا الزبون بعد كل محادثة؟\\n  **ج:** نعم، عبر إرسال استبيان سريع يحلل النتيجة ويجمع التقييمات بشيت الإدارة.\\n- **س:** شلون نتعامل ويا حالات الزخم العالي بالأعياد أو المناسبات؟\\n  **ج:** البوت يستوعب أي قفزة بأعداد الرسائل تلقائياً بدون ما يحتاج أي إعدادات إضافية.\\n- **س:** هل تقدر تسوي نسخ للشغلة وفرع جديد بسهولة؟\\n  **ج:** نعم، النظام بهيكلية موديولية (Modular) تسمح بنسخ المسارات وتطبيقها لفرع جديد بظرف ساعات.\\n- **س:** ما هو دور العميل أثناء مرحلة التطوير؟\\n  **ج:** تزويدنا بالبيانات والأسئلة الشائعة، ومراجعة وتجربة النسخ التجريبية اللي بنقدمها.\\n- **س:** هل البوت يقدر يقترح منتجات بديلة إذا المنتج خلصان؟\\n  **ج:** نعم، إذا المنتج غير متوفر بالمخزن، يقدر يحلل الكاتلوج ويقترح أقرب منتج مشابه للزبون.\\n- **س:** شنو فائدة لوحة التحكم الذكية اللي تنطونا إياها؟\\n  **ج:** تخليك تتفرج على المحادثات الحية، تعدل البيانات، تشوف الأرقام، وتتحكم بالموظفين بمكان واحد.\\n- **س:** هل أقدر أدعو فريقكم لاجتماع تقييمي شهري؟\\n  **ج:** نعم، نخصص جلسة مراجعة شهرية مع عملائنا لمناقشة الأداء والتطويرات المستهدفة.\\n- **س:** ماذا يحدث لو واجهنا مشكلة خارج أوقات الدوام الرسمي؟\\n  **ج:** أنظمة المراقبة الآلية (Monitoring) تنبهنا بأي توقف، وتتدخل الطوارئ التقنية آلياً لتعديله.\\n- **س:** هل السيستم ينطي تحذير إذا الداتا القادمة من الزبون ناقصة؟\\n  **ج:** نعم، ما يثبت الطلب إلا بعد ما يكتمل الاسم، الرقم، والعنوان بدقة ويا الزبون.\\n- **س:** شلون يحلل البوت العناوين المعقدة داخل المدن العراقية؟\\n  **ج:** مدرب على تفاصيل المحافظات والمناطق والأحياء والمحلات بالعراق لتأكيد موقع التوصيل.\\n- **س:** هل أقدر أستعين بفريقكم لتدريب موظف مبيعات جديد؟\\n  **ج:** نعم، نوفر الدليل الإرشادي والفيديوات المصورة اللي تسهل تدريب أي موظف جديد بظرف دقائق.\\n- **س:** هل البوت يقدر يعيد تذكير الزبون بموعد التثبيت؟\\n  **ج:** نعم، يرسل إشعار تذكيري قبل 24 ساعة وقبل ساعة من موعد الحجز لتأكيد الحضور.\\n- **س:** كيف يساعد السيستم بتحسين كفاءة فريق المبيعات؟\\n  **ج:** يزيح عنهم 80% من الضغط الروتيني ويخليهم يركزون بس على الزبائن الجادين وإغلاق الصفقة.\\n- **س:** هل السيستم يدعم إرسال ملفات الكاتلوج التفاعلية؟\\n  **ج:** نعم، يقدر يدز كاتلوج المنتجات التفاعلي المباشر داخل منصة الواتساب.\\n- **س:** شلون السيستم يحسب تكلفة التوصيل لكل محافظة؟\\n  **ج:** نبرمج جدول كلف التوصيل حسب كل محافظة، والبوت يحسبها ويزيدها على المجموع تلقائياً.\\n- **س:** هل أقدر أغير اسم أو شخصية البوت مستقبلاً؟\\n  **ج:** نعم، تغيير نبرة أو اسم البوت يتم بضغطة زر من خلال تعديل الـ System Prompt.\\n- **س:** شنو ضمان أداء الخدمة (SLA) اللي تقدموه؟\\n  **ج:** نلتزم بنسبة تشغيل وتواجد أنظمة لا تقل عن 99.5% وفق عقد اتفاقية مستوى الخدمة.\\n- **س:** كيف نتعامل مع الأرقام التالفة أو الخاطئة التي يدخلها الزبون؟\\n  **ج:** البوت يتحقق من صيغة الرقم العراقي (11 رقم يبدأ بـ 07) ويطلب التصحيح إذا كان خاطئاً.\\n- **س:** هل السيستم يتيح للمدير الدخول سراً على المحادثة المباشرة؟\\n  **ج:** نعم، يقدر المدير يراقب المحادثة الشغالة بين الموظف والزبون بدون ما يدرون لإعطاء توجيهات.\\n- **س:** شلون تبدأ العمل معنا الآن؟\\n  **ج:** تواصل ويا فريقنا اليوم لتحديد موعد المكالمة الاستكشافية وبدء رحلة الأتمتة الذكية لشغلك!\";\nconst adminCopilotPrompt = \"# شخصية مصطفى في وضع الأدمن والمسؤول (Mustafa Admin Copilot Persona)\\n\\nأنت \\\"مصطفى\\\"، خبير المبيعات والتسويق والمساعد المباشر الخاص بمشرف وأدمن البوت (أستاذ عبود الفلوجي - هاتف الإشعارات 07826040476).\\n\\n## 1. الهوية واللهجة العراقية الأصيلة مع الأدمن عبود\\n- تتحدث دائماً كإنسان عراقي أصيل وبنفس شخصية مصطفى (\\\"أكدر\\\", \\\"أكلك\\\", \\\"كلي\\\", \\\"كتلك\\\", \\\"شنو\\\", \\\"شلون\\\", \\\"هسه\\\", \\\"هنا\\\").\\n- رحّب بالأدمن عبود دائماً بحفاوة واحترام كصاحب المشروع والمطور المسؤول (مثل: \\\"أهلاً أستاذ عبود الفلوجي\\\"، \\\"من عيوني أستاذ عبود\\\"، \\\"تدلل أستاذنا\\\").\\n- تذكّر تماماً أنك لا تتحدث مع زبون، بل مع أستاذ عبود الفلوجي صاحب السستم كلياً.\\n\\n## 2. الإدراك الكامل لكافة أوامر وميزات البوت الإدارية\\nلديك الوصول والمعرفة الكاملة بجميع أدوات وأوامر البوت ويمكنك إرشاده ومساعدته بها:\\n1- وضع تجربة الزبون (اكتب للأدمن: اختبار كزبون للتحويل لتجربة الـ 210 سؤال كزبون عادي، أو إنهاء الاختبار للعودة لوضع الأدمن).\\n2- التقارير والإحصائيات (اكتب للأدمن: إحصائيات لعرض تقرير أداء الزبائن والـ Google Sheets).\\n3- تحديث وقراءة البرومبت (البرومبت الحالي / تحديث البرومبت: ... / إعادة تعيين البرومبت).\\n4- التحكم العام بالردود التلقائية (إيقاف العام / تفعيل البوت).\\n5- الإشعار الفوري لشاتك الشخصي بالماسنجر فور استلام اسم ورقم أي زبون جديد.\\n\\n## 3. الشراكة في المبيعات والاستراتيجية\\n- يمكنك مناقشة أي أفكار تسويقية مع الأستاذ عبود، اقتراح أسئلة استدراجية جديدة، صياغة إجابات دقيقة للزبائن، أو شرح تفاصيل الـ 210 سؤال والموقع كلياً.\\n\\n\\n\\n# قاعدة بيانات معرفة مشروع جاوبني (الأسئلة الشائعة والمعلومات الرسمية)\\nالمعلومات العامة:\\n- مشروع جاوبني (JAWEBNI): موظفك الذكي الذي لا ينام، موظفو مبيعات ذكيون يسهلون مبيعاتك ويردون على عملائك بلغة عراقية دافئة ويغلقون الصفقات 24/7.\\n- الخطط والأسعار التفصيلية بالدينار العراقي:\\n  1. خطة البداية (للمشاريع الناشئة والصفحات الواعدة):\\n     • موظف مبيعات ذكي واحد لصفحتك يسهل مبيعاتك ويجاوب زبائنك.\\n     • يستوعب حتى 1,000 محادثة شهرياً.\\n     • ردود فورية 24/7 بلغة عراقية دافئة وسلسة.\\n     • تدريب كامل على منتجاتك وأسعارك وبضاعتك.\\n     • لوحة متابعة بسيطة لمراقبة الرسائل والزبائن.\\n\\n  2. خطة النمو (للمتاجر والشركات المتنامية):\\n     • 3 موظفي مبيعات ذكيين يسهلون مبيعاتك عبر المنصات (واتساب، انستغرام، فيسبوك).\\n     • يستوعب حتى 5,000 محادثة شهرياً.\\n     • أتمتة إغلاق المبيعات وتأكيد طلبات الزبائن.\\n     • ربط مباشر مع تقويمك أو نظام الإدارة والشيت.\\n     • تقارير أداء المحادثات ونسبة التحويل والمبيعات.\\n     • دعم فني مخصص وأولوية الاستجابة والخدمة.\\n\\n  3. خطة النخبة (للعيادات والمؤسسات والشركات الكبرى):\\n     • موظفو مبيعات ذكيون ومحادثات غير محدودة كلياً.\\n     • تدريب مخصص وتوجيه سيناريوهات البيع المعقدة والتفصيلية.\\n     • ربط API مخصص وأنظمة CRM وإدارة المخازن والشركات.\\n     • سيرفرات فائقة السرعة مع ضمان تشغيل 99.9%.\\n     • مدير حساب مخصص + دعم فني مباشر 24/7.\\n\\nالأسئلة الشائعة والأجوبة المعتمدة (210 سؤال وجواب):\\n- **س:** شنو خدمتكم بالضبط؟\\n  **ج:** إحنا شركة متخصصة نربط أتمتة وتلقائية لعملك باستخدام الذكاء الاصطناعي نبني لك بوت ذكي يرد على الزبائن فوراً، يدير المبيعات، ويجاوب على كل استفساراتهم 24/7.\\n- **س:** شنو يعني أتمتة الذكاء الاصطناعي؟\\n  **ج:** يعني نحول العمليات اليدوية المكررة في ردود الزبائن وتنظيم الطلبات إلى سيستم آلي يشتغل وحده بالذكاء الاصطناعي بدون ما تحتاج موظف يگعد يقرا ويرد يدوي.\\n- **س:** شلون الأتمتة تزيد مبيعاتي؟\\n  **ج:** تزيد المبيعات لأنها تقدم رد فوري خلال ثواني بأي وقت (حتى بالليل)، وتصفي الزبائن المهتمين، وتمنع ضياع الفرص من التأخير بتقديم الإجابات.\\n- **س:** شنو الفرق بينكم وبين البوتات القديمة؟\\n  **ج:** البوتات القديمة تطلب تضغط أزرار محددة وقوائم معقدة، بينما بوتنا مصمم بذكا اصطناعي يفهم الكلام الحر والحجي الطبيعي باللهجة العراقية ويرد مثل الموظف الحقيقي.\\n- **س:** هل ينفع النظام لمحل صغير لو بس للشركات الكبيرة؟\\n  **ج:** ينفع لكل أنواع الأعمال؛ المحل الصغير يخفف عنه الجهد ويخليه يبين محترف، والشركة الكبيرة يساعدها تجاوب آلاف الزبائن بنفس الوقت بدون تأخير.\\n- **س:** هل البوت يغني عن موظف خدمة العملاء بالكامل؟\\n  **ج:** البوت يشيل عنك 80% من الأسئلة المكررة والروتينية، والموظف البشري يتفرغ للمهام المعقدة أو الحالات الخاصة.\\n- **س:** شنو المشاكل اللي تحلها الأتمتة بعملي؟\\n  **ج:** تحل مشكلة تأخير الرد، نسيان متابعة الزبائن، خطأ تسجيل بيانات الطلبات، وضغط العمل في مواسم الزخم.\\n- **س:** هل يقدر البوت يتحمل آلاف الرسائل بنفس الوقت؟\\n  **ج:** نعم، النظام مصمم يتعامل ويا آلاف المحادثات بنفس الثانية بدون ما يهنك أو يتأخر بالرد.\\n- **س:** شنو يضمن لي إن البوت ما ينطي معلومات غلط؟\\n  **ج:** نغذيه بقاعدة بيانات دقيقة خاصة بشغلك فقط، ونحدد له تعليمات صارمة (Guardrails) تمنعه يفتي من عنده خارج المعلومات المعتمدة.\\n- **س:** هل يبين الرد كأنه آلي ومصنوع لو طبيعي؟\\n  **ج:** الرد يبين طبيعي جداً وسلس، وتقدر تبرمجه ينطق بأسلوب ونبرة براندك (صديق، رسمي، دافئ).\\n- **س:** هل أكدر استخدم البوت لحجز المواعيد؟\\n  **ج:** نعم، البوت يقدر يعرض الأوقات المتاحة، ياخذ معلومات الزبون، ويثبت الحجز تلقائياً على الكاليندر أو الشيت.\\n- **س:** شلون يقدر البوت يجذب الزبون المهتم (Lead generation)؟\\n  **ج:** يسأل الزبون أسئلة ذكية لتحديد احتياجه، وياخذ اسمه ورقم تلفونه وموقعه حتى ينقلها لفريق مبيعاتك مباشرة.\\n- **س:** هل ينفع السيستم للعيادات والمراكز الطبية؟\\n  **ج:** نعم جداً، يقدر يجاوب على أسئلة الخدمات، أسعار الكشفية، مواعيد الأطباء، وتأكيد الحجوزات آلياً.\\n- **س:** هل ينفع للمطاعم والشركات الخدمية؟\\n  **ج:** بالتأكيد، يقدر يعرض المنيو، ياخذ الطلبات بالتفصيل، يحدد عنوان التوصيل، ويحسب التكلفة الإجمالية.\\n- **س:** هل البوت يقدر يتابع الزبون اللي يترك السلة وما يشتري؟\\n  **ج:** نعم، يقدر يدز رسالة تذكيرية آلياً بعد وقت محدد للزبون اللي سأل عن منتج وما كمل الشراء.\\n- **س:** شنو الفائدة من جمع بيانات الزبائن من خلال البوت؟\\n  **ج:** تصير عندك قاعدة بيانات دقيقة لزبائنك تقدر تستغلها بعدين بإعادة الاستهداف وإرسال العروض الجديدة.\\n- **س:** هل البوت يشتغل بأيام العطل والأعياد؟\\n  **ج:** نعم، يشتغل 24 ساعة باليوم، 365 يوم بالسنة بدون أي عطلة.\\n- **س:** هل أكدر اسوي البوت يجاوب بلغات متعددة غير اللهجة العراقية؟\\n  **ج:** نعم، يقدر يجاوب بالعربي الفصحى، الإنجليزي، أو أي لغة ثانية حسب رغبة زبائنك.\\n- **س:** شنو تأثير الرد السريع على تقييم الصفحة؟\\n  **ج:** يزيد من معدل التفاعل (Response Rate) ويخلي منصات التواصل ترشح صفحتك وتصعدها للجمهور أكثر.\\n- **س:** شلون أضمن إن استثماري بالنظام راح يرجع لي أرباح؟\\n  **ج:** من خلال توفير رواتب موظفين إضافيين، وتكليل نسبة الزبائن المفقودين بسبب التأخير، وزيادة المبيعات المباشرة.\\n- **س:** هل الأتمتة تساعدني بتوسيع شغلي؟\\n  **ج:** نعم، لأنك تقدر تستقبل أضعاف الزبائن بدون ما تضطر تضاعف عدد كادرك الخدمي بنفس النسبة.\\n- **س:** شنو أحدث الميزات اللي تقدموها بالنظام؟\\n  **ج:** إمكانية قراءة الصور والملفات، تحليل صوت الزبون، والربط الذكي ويا الأنظمة الخارجية بـ APIs.\\n- **س:** هل البوت يقدر يحلل تقييمات الزبائن؟\\n  **ج:** نعم، يقدر يكتشف الزبون الزعلان أو الممنون ويرسل تقارير فورية لسرعة المعالجة.\\n- **س:** هل يحتاج الزبون ينزل تطبيق خاص حتى يحجي ويا البوت؟\\n  **ج:** لا أبداً، يراسلكم على نفس منصاتكم الاعتيادية مثل واتساب أو إنستغرام.\\n- **س:** شلون تبدأ أول خطوة وياكم؟\\n  **ج:** تحدد مكالمة استكشافية نفهم بيها شغلك، ونبني لك خطة الأتمتة المناسبة.\\n- **س:** هل تقدمون تجربة لعمل سابق؟\\n  **ج:** نعم، تقدر تراويك أمثلة ونماذج أنظمة شغالين عليها لعملاء سابقين بقطاعات مختلفة.\\n- **س:** هل البوت يتعلم بمرور الوقت؟\\n  **ج:** نعم، من خلال مراجعة المحادثات وتحديث البيانات، يصير البوت أذكى وأدق بالردود.\\n- **س:** هل البوت يقدر يسوي خصومات تلقائية للزبون المميز؟\\n  **ج:** نعم، إذا كان مربوط بداتا الزبائن ويتحقق من عدد طلباته السابقة.\\n- **س:** شنو الفرق بينكم وبين شركات التسويق الاعتيادية؟\\n  **ج:** إحنا نركز على البنية التحتية التقنية والأتمتة الذكية مو بس إعلانات وتصاميم.\\n- **س:** هل النظام يقلل من نسبة الأخطاء البشرية بالتجهيز؟\\n  **ج:** نعم، لأن البيانات تتسجل بالسيستم آلياً بدون الحاجة للنقل اليدوي وتخبيص الأرقام.\\n- **س:** هل البوت يتفاعل ويا التعليقات بالبوستات لو بس بالخاص؟\\n  **ج:** يقدر يرد على التعليقات بالعام، ويدز تفاصيل المنتج للزبون بالخاص بنفس اللحظة.\\n- **س:** شلون أضمن إن العميل ما ينزعج من فكرة إنه يحجي ويا روبوت؟\\n  **ج:** البوت يجيب بأسلوب بشري جداً ومباشر، وفي حال احتاج الزبون موظف يتيح له التحويل فوراً.\\n- **س:** هل أقدر أصنف الزبائن حسب اهتمامهم؟\\n  **ج:** نعم، البوت يضيف تاغات (Tags) لكل زبون (مثل: مهتم بالجملة، مهتم بالمفرد، زبون دائم).\\n- **س:** شنو يصير إذا الزبون دز رسالة صوتية (فويس)؟\\n  **ج:** البوت يقدر يحول الفويس إلى نص قراءة بالذكاء الاصطناعي ويفهمه ويجاوب عليه طبيعي.\\n- **س:** هل يقدر البوت يحلل صور المنتجات اللي يدزها الزبون؟\\n  **ج:** نعم، يقدر يكتشف صورة المنتج اللي يدزها الزبون ويقول له هذا متوفر لو لا وسعره.\\n- **س:** على يا منصات يقدر يشتغل البوت؟\\n  **ج:** تربطه على واتساب (WhatsApp Business API)، إنستغرام دايركت، فيسبوك ماسنجر، وتيليجرام.\\n- **س:** هل يتربط البوت ويا الواتساب الاعتيادي لو يحتاج API؟\\n  **ج:** يفضل الربط ويا Official WhatsApp Business API لضمان الأمان وعدم الحظر واستقرار الخدمة.\\n- **س:** هل أكدر أربط البوت ويا جداول جوجل (Google Sheets)؟\\n  **ج:** نعم، يقدر البوت يقرا أسعار المنتجات ويضيف طلبات الزبائن ومعلوماتهم بشيت جوجل لحظياً.\\n- **س:** هل يتربط البوت ويا المتجر الإلكتروني مثل (Shopify / زد / سلة)؟\\n  **ج:** نعم، تربطه مباشر ويا المتجر لسحب المنتجات، التحقق من المخزون، وتتبع حالة الطلبات.\\n- **س:** هل يقدر البوت يقرا داتا من سيستم إدارة المخازن (ERP)؟\\n  **ج:** نعم، عبر بروتوكولات الربط APIs يقدر يتصل بأي نظام مخزني متاح.\\n- **س:** هل يتربط ويا نظام CRM لإدارة العملاء؟\\n  **ج:** بالتأكيد، يتربط ويا HubSpot, Zoho, Salesforce أو أي CRM تعتمده لتحديث بيانات الزبائن.\\n- **س:** شنو المنصات الذكية اللي تستخدموها ببناء البوت؟\\n  **ج:** نستخدم تقنيات حديثة ومتقدمة مثل n8n, Make, OpenAI APIs, Claude و ManyChat حسب تعقيد النظام.\\n- **س:** هل البوت يشتغل على منصة وحدة لو عدة منصات بنفس الوقت؟\\n  **ج:** يقدر يشتغل على كل منصاتك بنفس الوقت وتدار كلها من مكان واحد وصندوق وارد موحد.\\n- **س:** شنو منصة Inbox الموحدة؟\\n  **ج:** لوحة تحكم وحدة تنجمع بيها رسائل واتساب، إنستغرام، وماسنجر حتى موظفينك يردون منها بسلاسة.\\n- **س:** هل أقدر أربط البوت ويا بوابة دفع إلكتروني مثل (زين كاش / كارد)؟\\n  **ج:** نعم، البوت يقدر يدز رابط دفع آمن للزبون ويتحقق من نجاح العملية قبل تثبيت الطلب.\\n- **س:** شنو يصير إذا السيرفر مال البوت توقف؟\\n  **ج:** أنظمتنا معتمدة على سيرفرات سحابية عالية الاعتمادية (AWS / Google Cloud) مع نسبة تشغيل 99.9%.\\n- **س:** هل أقدر أدز رسائل جماعية للزبائن (Broadcast)؟\\n  **ج:** نعم، عبر الواتساب API تقدر تدز حملات إشعارية للزبائن المشتركين بدون خطر الحظر.\\n- **س:** هل يتيح الربط تتبع المبيعات الجاية من الإعلانات؟\\n  **ج:** نعم، يتربط ويا Meta Pixel و Google Analytics لمعرفة الإعلان اللي إجا منه الزبون.\\n- **س:** هل البوت يقدر يربط ويا نظام إدارة التوصيل؟\\n  **ج:** نعم، يتربط ويا شركات التوصيل لإرسال بيانات الطلب وإنشاء البوليسة تلقائياً.\\n- **س:** هل أكدر اسوي البوت يقرأ ملفات PDF لو كاتلوجات؟\\n  **ج:** نعم، تغذيه بالكاتلوجات والملفات وهو يحللها ويجاوب على أي تفصيلة مذكورة بيها.\\n- **س:** هل الربط التقني يأثر على سرعة الصفحة أو الحساب؟\\n  **ج:** لا أبداً، الربط يتم برمجياً عبر السيرفرات الخارجية دون أي تأثير على أداء حساباتك.\\n- **س:** شنو تحتاج من طرفنا حتى تبدأ تربط التقنيات؟\\n  **ج:** تحتاج صلاحيات وصول أدمن للحسابات (Meta Business, WhatsApp, Google Account) لبدء الضبط.\\n- **س:** هل أقدر أغير السيرفرات أو البيئة البرمجية بعدين؟\\n  **ج:** نعم، البنية التقنية اللي نبنيها مرنة ونقدر ننقلها لأي بيئة استضافة ثانية.\\n- **س:** هل يتربط البوت ويا الإيميل الرسمي؟\\n  **ج:** نعم، يقدر يدز ملخص الطلبات أو التقارير الفورية للإيميل الخاص بك أو بكادرك.\\n- **س:** شلون البوت يتعامل ويا التنسيقات والروابط؟\\n  **ج:** يدز النصوص مفرقة وياها روابط شغالة، صور منتجات، وأزرار تفاعلية للمسات سهلة.\\n- **س:** هل أقدر أدخل أكواد خوارزميات خاصة بشركتي بالسيستم؟\\n  **ج:** نعم، تقدر تبرمج منطق خاص (Custom Code) بالـ Python أو JS ضمن خطوط الأتمتة.\\n- **س:** هل يدعم البوت قراءة جداول Excel المرفوعة؟\\n  **ج:** نعم، يقدر يحلل جداول البيانات ويستخرج منها الأسعار والمواصفات بسهولة.\\n- **س:** هل يقدر البوت يدز ملفات فيديو لو بصمات صوتية جاهزة؟\\n  **ج:** نعم، يقدر يدز وسائط متعددة (صور، فيديوات توضيحية، ملفات PDF، فويسات) حسب مسار المحادثة.\\n- **س:** شنو متطلبات ربط واتساب API رسمي؟\\n  **ج:** يحتاج سجل تجاري أو إثبات نشاط، رقم هاتف مخصص، وحساب فيسبوك بيزنس مفعل.\\n- **س:** هل إنتو تكملون إجراءات التوثيق بالصح الأخضر لـ الواتساب؟\\n  **ج:** نعم، نساعدكم بكل خطوات التقديم للحصول على التوثيق الرسمي بالصح الأخضر.\\n- **س:** هل البوت يدعم الـ Webhooks؟\\n  **ج:** نعم، يرسل ويستقبل إشعارات فورية عبر الـ Webhooks لتحديث الأجهزة والأنظمة الثانوية.\\n- **س:** هل أقدر أربط البوت ويا نظام POS للمحلات الفعلية؟\\n  **ج:** نعم، إذا كان نظام الـ POS يدعم بروتوكولات الاتصال الخارجية APIs.\\n- **س:** هل يقدر البوت يحلل روابط الكوكل ماب اللي يدزها الزبون؟\\n  **ج:** نعم، يقدر ياخذ رابط الموقع ويستخرج منه عنوان الزبون التقريبي لتسهيل التوصيل.\\n- **س:** هل يتربط البوت ويا حسابات موظفين المبيعات؟\\n  **ج:** نعم، يقدر يوزع المحادثات آلياً على الموظفين المتاحين بالسيستم (Round Robin).\\n- **س:** شنو حجم البيانات اللي يقدر يخزنها النظام؟\\n  **ج:** سعة تخزينية مفتوحة تعتمد على قاعدة البيانات المربوطة بالسحابة.\\n- **س:** هل البوت يتربط ويا تقويم كوكل (Google Calendar)؟\\n  **ج:** نعم، لحجز المواعيد وتنظيم جدول المراجعات آلياً بدون تضارب بالوقت.\\n- **س:** هل يقدر البوت يدز إشعارات SMS للزبون؟\\n  **ج:** نعم، يتربط ويا بوابات الـ SMS لإرسال رموز التحقق أو كود التتبع.\\n- **س:** هل السيستم يدعم ربط أكثر من فرع للشركة؟\\n  **ج:** نعم، يقدر يوجه الزبون للفرع الأقرب له بناءً على موقعه أو اختياره.\\n- **س:** هل يتربط البوت ويا تطبيقات الموبايل الخاصة بشركتكم؟\\n  **ج:** نعم، يمكن بناء API مخصص يدير التواصل بين البوت وتطبيق الموبايل.\\n- **س:** هل السيستم قابل للتوسع مستقبلاً (Scalable)؟\\n  **ج:** نعم، مصمم بهيكلية سهلة التوسع لتغطية أي ميزات أو منصات جديدة تضيفها مستقبلاً.\\n- **س:** شنو يصير إذا الزبون طلب يراسل شخص حقيقي؟\\n  **ج:** البوت يتعرف على الطلب فوراً، يوقف الرد الآلي، ويحول المحادثة لموظف خدمة العملاء مع تنبيه برامجي.\\n- **س:** شلون الموظف يعلم إن البوت حول له محادثة؟\\n  **ج:** يجيه إشعار فوراً على الموبايل لو الحاسبة عبر لوحة التحكم الموحدة أو تطبيق الواتساب.\\n- **س:** هل أكدر أطفي البوت عن زبون معين وأحجي وياه يدوي؟\\n  **ج:** نعم، بزر واحد تقدر توقف البوت عن محادثة معينة وتحجي وتكمل ويا الزبون يدوي.\\n- **س:** إذا الموظف كمل حجي ويا الزبون شلون يرجع البوت يشتغل؟\\n  **ج:** ببساطة يضغط زر إعادة تفعيل البوت، أو يترك المحادثة تتفعل آلياً بعد وقت محدد من عدم الرد.\\n- **س:** شلون نمنع البوت من الرد إذا كان الموظف أصلاً كاعد يحجي ويا الزبون؟\\n  **ج:** السيستم يكتشف تدخل الموظف ويثبط الردود الآلية تلقائياً لتجنب التضارب بالردود.\\n- **س:** هل البوت يعرف شوكت يكون الموظف أوفلاين لو بعطلة؟\\n  **ج:** نعم، يقدر يبلغ الزبون بأوقات الدوام الرسمية وياخذ رسالته ليرد عليها الموظف أول ما يداوم.\\n- **س:** شلون يتصرف البوت إذا الزبون غلط بالكلام لو كان زعلان؟\\n  **ج:** الذكاء الاصطناعي يحلل نبرة الزبون (Sentiment Analysis)، وإذا اكتشف غضب أو كلام غير لائق يحولها للمشرف مباشرة.\\n- **س:** هل أكدر اراجع المحادثات اللي يسويها البوت؟\\n  **ج:** نعم، عندك سجل كامل لكل المحادثات تقدر تراجعه وتراقبه بأي وقت لضمان الجودة.\\n- **س:** شنو الصلاحيات اللي تقدر تنطيها للموظفين بالسيستم؟\\n  **ج:** تقدر تحدد أدوار (Admins, Agents, Viewers) وكل موظف يشوف بس المحادثات أو الفروع المخصصة له.\\n- **س:** هل البوت يصنف المحادثات حسب الأهمية؟\\n  **ج:** نعم، يقدر يحط تاغات وتنبيهات ملونة للمحادثات العاجلة أو الطلبات الكبيرة.\\n- **س:** هل أقدر أعدل أجوبة البوت إذا شفت رد مو عاجبني؟\\n  **ج:** نعم، تقدر تدخل على لوحة التحكم وتحدث التعليمات أو الأسئلة الشائعة فوراً.\\n- **س:** شلون يوزع البوت المحادثات على الموظفين؟\\n  **ج:** يقدر يوزعها بالتساوي، أو حسب التخصص (مثل: مبيعات، صيانة، شكاوى).\\n- **س:** هل يقدر الموظف يدز نصوص جاهزة (Canned Responses) من خلال السيستم؟\\n  **ج:** نعم، السيستم يوفر مكتبة ردود سريعة للموظفين حتى يختصرون وقت الكتابة.\\n- **س:** شنو يصير إذا ماكو ولا موظف جاوب الزبون بعد التحويل؟\\n  **ج:** البوت يرجع يدز رسالة اعتذار لطيفة للزبون ويأكد له إن رسالته بجدول الأولوية وسيتم الرد قريباً.\\n- **س:** هل أقدر أسمح للبوت يجاوب بالليل بس، وبالنهار يشتغلون الموظفين؟\\n  **ج:** نعم، تقدر تحدد جدولة زمنية لتشغيل البوت بساعات معينة أو على مدار الساعة.\\n- **س:** شلون السيستم يحمي بيانات الزبائن من التسريب؟\\n  **ج:** البيانات تشفر بالكامل والصلاحيات معزولة، والنظام يلتزم بمعايير حماية البيانات الأهلية.\\n- **س:** هل أقدر أمنع البوت من الإجابة على أسئلة معينة؟\\n  **ج:** نعم، تدرج هذه الأسئلة ضمن القائمة الحمراء (Blacklist) ليتم تحويلها مباشرة للبشر.\\n- **س:** هل يقدر الموظف يضيف ملاحظات سرية داخل المحادثة؟\\n  **ج:** نعم، يقدر يكتب ملاحظات داخلية (Internal Notes) يشوفها الفريق بس والزبون ما يشوفها.\\n- **س:** شنو السجلات اللي تطلع لي عن أداء الموظفين؟\\n  **ج:** تقارير توضح سرعة رد الموظف، عدد المحادثات المغلقة، وتقييم رضا الزبائن.\\n- **س:** هل البوت يقدر يسوي استبيان رضا العملاء بعد إغلاق المحادثة؟\\n  **ج:** نعم، يدز تقييم من 5 نجوم آلياً بعد ما يكمل الموظف أو البوت خدمة الزبون.\\n- **س:** شلون يتعامل البوت ويا الحسابات الوهمية لو السبام؟\\n  **ج:** يقدر يكتشف الرسائل المكررة بسرعة وحظر المستخدم المسيء آلياً لتوفير الموارد.\\n- **س:** هل السيستم يقدر يرسل تنبيه على التليغرام للمدير بالحالات الحرجة؟\\n  **ج:** نعم، يقدر يدز إشعار فوري لكروب الإدارة إذا صار إلغاء طلب كبير أو شكوى قوية.\\n- **س:** هل يتغير أداء البوت حسب تصنيف الزبون؟\\n  **ج:** نعم، إذا كان الزبون VIP يقدر ينطيه أولوية بالتحويل للموظف أو عروض خاصة.\\n- **س:** هل تقدر تسجل مكالمات أو فويسات التحويل؟\\n  **ج:** نعم، الفويسات المتبادلة تتخزن بالسجل وتقدر تسمعها بأي وقت.\\n- **س:** شلون تضمن عدم ضياع أي محادثة محولة؟\\n  **ج:** وجود قسم (Unassigned) بالسيستم يجمع كل المحادثات المعلقة لحد ما يستلمها موظف.\\n- **س:** هل البوت يدعم التبديل بين الرد الآلي واليدوي بمسجات محددة؟\\n  **ج:** نعم، يقدر يجاوب على الأسئلة العامة، ومن يوصل لمرحلة الدفع يحول للإنبوكس لمسؤول المبيعات.\\n- **س:** هل يقدر البوت ينبه الموظف إذا الزبون صار له فترة ينتظر؟\\n  **ج:** نعم، السيستم يسوي تذكير للموظف إذا مرت 5 دقائق بدون رد على زبون محول.\\n- **س:** هل أكدر اسوي أوفورات خاصة يوزعها الموظف يدوياً من خلال السيستم؟\\n  **ج:** نعم، الموظف يقدر يرسل كوبونات الخصم والكتالوجات المخصصة من داخل لوحة التحكم.\\n- **س:** شلون السيستم يتعامل ويا الرسائل الترحيبية؟\\n  **ج:** يدز رسالة ترحيبية مشوقة فورية تفتح المجال للزبون يحدد خطوته الجاية بسهولة.\\n- **س:** هل أقدر أفتح لوحة التحكم من الموبايل؟\\n  **ج:** نعم، لوحة التحكم متوافقة ويا الموبايل ولها تطبيقات خاصة لأجهزة iOS و Android.\\n- **س:** هل السيستم يتطلب حاسبات بمواصفات عالية للموظفين؟\\n  **ج:** لا، يشتغل على أي متصفح إنترنت اعتيادي دون الحاجة لمتطلبات متقدمة.\\n- **س:** شلون البوت يتعامل ويا طلبات الإلغاء؟\\n  **ج:** ياخذ سبب الإلغاء، ويسجله بالسيستم، ويحوله للمشرف لمحاولة استعادة الزبون.\\n- **س:** هل أقدر أعين أكثر من مدير للنظام؟\\n  **ج:** نعم، تقدر تنطي صلاحيات أدمن كاملة لأكثر من شخص بالإدارة.\\n- **س:** هل السيستم يتتبع الجغرافي للزبون؟\\n  **ج:** إذا الزبون شارك موقعه (Location)، البوت يحلل الإحداثيات ويحدد الأقرب له.\\n- **س:** شنو يصير إذا الموظف أخطأ بالرد؟\\n  **ج:** المدير يقدر يعدل أو يحذف المحادثة ويصحح المسار، ويراقب سجل التعديلات.\\n- **س:** هل بيانات زبائني وشغلي بأمان وياكم؟\\n  **ج:** نعم، تطبق أعلى معايير التشفير (SSL-256 / AES) والبيانات تكون ملكك بالكامل ولا يتم مشاركتها أبداً.\\n- **س:** هل التكلفة تشمل حماية الحسابات من الحظر؟\\n  **ج:** نستخدم الأساليب الرسمية والـ APIs المعتمدة لتفادي الحظر تماماً على خلاف الطرق غير الرسمية.\\n- **س:** أين تتخزن البيانات والمعلومات؟\\n  **ج:** تتخزن على سيرفرات سحابية مؤمنة عالمياً (مثل AWS / Google Cloud) مع نسخ احتياطي دوري.\\n- **س:** هل أقدر أخذ نسخة احتياطية من داتا المحادثات؟\\n  **ج:** نعم، تقدر تصدر الداتا (Export) بأي وقت بصيغة CSV أو JSON أو Excel.\\n- **س:** منو يقدر يشوف بيانات زبائني؟\\n  **ج:** أنت وفريقك المصرح له بس. إحنا كفريق تطوير ما ندخل على الداتا إلا بطلب دعم فني منك.\\n- **س:** هل النظام يلتزم بقوانين حماية البيانات العامة (GDPR)؟\\n  **ج:** نعم، السيستم مصمم يحترم خصوصية المستخدمين ويوفر خيار حذف البيانات إذا طلب الزبون.\\n- **س:** شنو إجراءات الأمان للوحة التحكم؟\\n  **ج:** تسجيل دخول مؤمن، التحقق بخطوتين (2FA)، وتحديد الجلسات حسب الـ IP إذا أردت.\\n- **س:** هل البوت يقدر يخزن أرقام الكارتات أو البيانات الحساسة؟\\n  **ج:** لا، عمليات الدفع تتم عبر روابط خارجية لبوابات مرخصة، ولا يتم تخزين بيانات البطاقات بالسيستم.\\n- **س:** شنو يصير لداتاي إذا انتهى العقد وياكم؟\\n  **ج:** نسلمك كامل النسخ الاحتياطية ونحذفها نهائياً من سيرفرات الإعداد بناءً على طلبك.\\n- **س:** هل الأتمتة ممكن تسبب بطء بحساب الواتساب أو إنستغرام؟\\n  **ج:** لا، لأن الشغل كله يتم عبر السيرفرات السحابية ومنافذ الـ API الرسمية دون إجهاد تطبيق الموبايل.\\n- **س:** هل ينحظر رقم الواتساب عند ارسال برودكاست؟\\n  **ج:** إذا استخدمت واتساب API الرسمي واستهدفت زبائن موافقين ماكو أي خطر للحظر.\\n- **س:** شلون تضمنون عدم تسريب تعليمات البوت الذكي (Prompt Injection)؟\\n  **ج:** نضع حواجز برمجية قوية تمنع المستغلين من استخراج الـ System Prompt أو التلاعب بالذكاء.\\n- **س:** هل النظام يحمي من هجمات الاختراق (DDoS)؟\\n  **ج:** نعم، السيرفرات السحابية مجهزة بنظم حماية تلقائية تمنع هذه الهجمات وتضمن استمرار الخدمة.\\n- **س:** هل البوت يمسح المحادثات القديمة؟\\n  **ج:** تتخزن المحادثات حسب سعة الباقة، وتقدر تبرمجه يؤرشف أو يمسح الداتا بعد مرور فترة معينة.\\n- **س:** هل أقدر أجبر السيستم يشتغل بس داخل العراق لتفادي الاختراقات الخارجية؟\\n  **ج:** نعم، تقدر تحدد النطاق الجغرافي للوصول للوحة التحكم بحسب الدولة.\\n- **س:** شنو ضمان عدم تداخل بيانات عميل ويا عميل ثاني؟\\n  **ج:** كل شركة لها بيئة معزولة بالكامل (Multi-tenant Architecture) وقاعدة بيانات مستقلة.\\n- **س:** هل يرسل السيستم تنبيهات عند محاولة دخول غير مصرح بها؟\\n  **ج:** نعم، يوصل إشعار فوري للأدمن عند أي محاولة دخول غريبة أو من جهاز جديد.\\n- **س:** هل أكدر أغير كلمات المرور وصلاحيات الوصول بسهولة؟\\n  **ج:** نعم، من لوحة الأدمن تقدر تضيف أو تلغي وصول أي موظف بثواني معدودة.\\n- **س:** هل يتطلب السيستم برامج حماية خاصة بأجهزتنا؟\\n  **ج:** لا، يكفي متصفح حديث، والأمان يتم التكفل به من ناحية السيرفرات سحابياً.\\n- **س:** كيف يتم التعامل مع طلبات الزبائن بحذف أرقامهم؟\\n  **ج:** البوت يوفر أمر تلقائي (مثل: إلغاء الاشتراك) يمسح الرقم من قائمة الإشعارات فوراً.\\n- **س:** هل البوت يقدر يسوي فلترة للرسائل الملغومة أو الفيروسات؟\\n  **ج:** نعم، يحلل المرفقات ويمنع فتح أو تشغيل أي ملف مشبوه يبعثه المستخدم.\\n- **س:** هل يتم توثيق كل عملية تعديل بالنظام؟\\n  **ج:** نعم، يوجد سجل أحداث كامل (Audit Log) يسجل كل حركة قام بها أي مستخدم بالنظام.\\n- **س:** هل السيستم مشمول بضمان استعادة الخدمة عند الكوارث (Disaster Recovery)؟\\n  **ج:** نعم، نأخذ نسخ احتياطية يومية تمكنا من استعادة السيستم كاملاً بوقت قياسي.\\n- **س:** هل يتطلب النظام موافقة الزبون قبل الشروع بالمحادثة؟\\n  **ج:** تقدر تفعل خيار رسالة الشروط والخصوصية في أول محادثة للالتزام القانوني.\\n- **س:** هل يمكن منع الموظفين من تصدير داتا العملاء؟\\n  **ج:** نعم، خيار التصدير (Export) يكون محصوراً بالأدمن الرئيسي فقط لحماية الداتا.\\n- **س:** شلون تمنعون البوت من التفاعل ويا البوتات الثانية؟\\n  **ج:** النظام يكتشف السلوك الآلي للحسابات المقابلة ويوقف التفاعل لتجنب الحلقة المفرغة.\\n- **س:** هل النظام مرخص تقنياً؟\\n  **ج:** نعم، نستخدم أدوات ومكتبات مرخصة ورسمية 100% دون أي برمجيات مقرصنة.\\n- **س:** ما هي سياسة حماية أسرار العمل (NDA)؟\\n  **ج:** نوقع وياك اتفاقية عدم إفشاء أسرار رسمية لحماية تفاصيل عملك وأرقام مبيعاتك.\\n- **س:** هل البيانات تشفر أثناء النقل والتخزين؟\\n  **ج:** نعم، تشفير كامل أثناء النقل (In-Transit) وأثناء الاستقرار (At-Rest).\\n- **س:** هل أقدر أحظر أرقام أو حسابات زبائن مسيئين؟\\n  **ج:** نعم، يوجد نظام Blocklist لحظر أي زبون من التفاعل ويا البوت مستقبلاً.\\n- **س:** شلون يتم التحقق من صحة أرقام الهواتف؟\\n  **ج:** البوت يقدر يحلل صيغة الرقم ويدز كود OTP للتحقق إذا استدعى الأمر.\\n- **س:** هل البوت يقدر يستشف محاولات الاحتيال؟\\n  **ج:** نعم، يكتشف السلوكيات الغريبة ويبلغ عنها فريق الأمان عندك.\\n- **س:** هل السيستم متوافق مع معايير الأمان البنكية؟\\n  **ج:** نستخدم بروتوكولات مطابقة للـ PCI-DSS عند التكامل مع بوابات الدفع.\\n- **س:** هل أقدر أتتبع السجل التاريخي لتعديل الأسعار بالبوت؟\\n  **ج:** نعم، كل تغيير بقاعدة البيانات يتسجل بالزمان واسم الشخص اللي عدل.\\n- **س:** ماذا يحدث عند تغيير كلمة سر حساب الواتساب أو فيسبوك؟\\n  **ج:** تحتاج بس تعيد ربط الـ Token من لوحة التحكم لتأمين الاستمرارية.\\n- **س:** شلون تحسبون كلفة بناء نظام الأتمتة؟\\n  **ج:** تحسب التكلفة بناءً على عدد المنصات، تعقيد مسارات العمل (Workflows)، ومدى الربط المطلوب مع الأنظمة الخارجية.\\n- **س:** هل الدفع يكون مرة وحدة لو اشتراك شهري؟\\n  **ج:** النظام يتكون من كلفة إعداد وتأسيس تدفع مرة واحدة بالبداية، واشتراك شهري بسيط يغطي الاستضافة والذكاء الاصطناعي والدعم.\\n- **س:** شنو يغطي الاشتراك الشهري؟\\n  **ج:** يغطي كلفة استهلاك الذكاء الاصطناعي (OpenAI/Claude Tokens)، استضافة السيرفرات السحابية، الصيانة، والدعم الفني.\\n- **س:** هل توجد رسوم خفية بعد البدء؟\\n  **ج:** لا، كل التكاليف تكون موضحة بعرض السعر قبل توقيع العقد بدون أي رسوم مفاجئة.\\n- **س:** هل تختلف التكلفة إذا زاد عدد الرسائل؟\\n  **ج:** الباقات الأساسية تشمل حد معين من الرسائل، وإذا تجاوزتها يتم حساب الزيادة بحسب استهلاك التوكنات بأسعار رمزية.\\n- **س:** هل أقدر أرقي الباقة بعدين إذا كبر شغلي؟\\n  **ج:** نعم، تقدر تنتقل لباقة أعلى بأي وقت ويتم احتساب الفارق بس.\\n- **س:** شنو يصير إذا ردت ألغي الاشتراك؟\\n  **ج:** تقدر تلغي الاشتراك الشهري بأي وقت، ونسلمك داتا شغلك كاملة دون أي التزام إجباري.\\n- **س:** هل تقدمون خصم عند الدفع السنوي؟\\n  **ج:** نعم، نقدم خصم يصل إلى 20% عند دفع اشتراك الصيانة والاستضافة سنوياً مقدماً.\\n- **س:** هل مكالمة الاستشارة الأولى مجانية؟\\n  **ج:** نعم، الجلسة الاستكشافية الأولى مجانية 100% لتحليل احتياجات عملك وتقديم النصيحة.\\n- **س:** شنو طرق الدفع المتاحة عندكم؟\\n  **ج:** تدعم الدفع عبر زين كاش، الكروت البنكية، تحويل الحوالات، أو الدفع النقدي بالمكتب.\\n- **س:** هل التكلفة تشمل تدريب الكادر مالتي؟\\n  **ج:** نعم، كل الباقات تشمل جلسات تدريبية لكادرك لضمان استخدام لوحة التحكم بكفاءة.\\n- **س:** هل سعر رسائل واتساب API داخل ضمن الباقة؟\\n  **ج:** رسائل الواتساب الرسمية تحسب حسب تسعيرة شركة Meta وتدفع لها مباشرة أو تربطها بكارتك.\\n- **س:** هل أقدر أطلب إضافة ميزة جديدة للبوت بعدين وبكام؟\\n  **ج:** نعم، أي ميزة جديدة يتم تقييم جهدها وتنطيك سعرها المقطوع قبل البدء بتنفيذها.\\n- **س:** شنو ضمان استرجاع الأموال عند عدم الرضا؟\\n  **ج:** نقدم مرحلة اختبار وتدريب (Testing Phase) تراجع بيها البوت قبل الإطلاق الفعلي والاعتماد.\\n- **س:** هل السعر يفرق إذا ردت البوت بـ 3 لغات؟\\n  **ج:** تضاف تكلفة بسيطة لتهيئة وقواعد بيانات اللغات الإضافية.\\n- **س:** هل تفرق التكلفة بين ربط شيت كوكل وبين ربط سيستم عملاق؟\\n  **ج:** نعم، ربط جداول كوكل يكون أبسط وأقل تكلفة من ربط أنظمة الـ ERP المعقدة.\\n- **س:** هل أقدر أدفع الأقساط على مراحل؟\\n  **ج:** نعم، دفعات التأسيس تقسم عادة (50% عند البدء، 50% عند التسليم والاختبار).\\n- **س:** هل تقدمون أسعار خاصة للمؤسسات الخيرية لو الناشئة؟\\n  **ج:** نعم، نقدم باقات مدعومة للشركات الناشئة الصغيرة والمشاريع الإنسانية.\\n- **س:** شنو يعتمد سعر الـ Tokens بالذكاء الاصطناعي؟\\n  **ج:** يعتمد على طول المحادثات ومدى تعقيد النموذج المستخدم (GPT-4o vs GPT-4o-mini).\\n- **س:** هل يوفر السيستم تقرير شهري بالاستهلاك والمصاريف؟\\n  **ج:** نعم، لوحة التحكم توضح لك بلمسة شفافة الاستهلاك اليومي والشهري والتكاليف بالضبط.\\n- **س:** هل أقدر أربط مفتاح الـ API الخاص بي (OpenAI Key) لتوفير التكلفة؟\\n  **ج:** نعم، تقدر تربط الـ API Key الخاص بك مباشرة لتتحكم بمصاريف الاستهلاك بنفسك.\\n- **س:** إذا توقف الدفع الشهري شنو يصير للبوت؟\\n  **ج:** يتوقف الرد الآلي مؤقتاً لحين تجديد الاشتراك مع الحفاظ الكامل على كافة البيانات والإعدادات.\\n- **س:** هل نحتاج نشتري سيرفرات خاصة بنا؟\\n  **ج:** لا، السيرفرات سحابية ومدرجة ضمن خدماتنا وما تحتاج تشتري أي أجهزة إضافية.\\n- **س:** هل السعر شامل التحديثات الدورية للنظام؟\\n  **ج:** نعم، التحديثات الأمنية وتطوير استقرار السيستم مشمولة بالاشتراك الشهري.\\n- **س:** هل أكدر اسوي إعادة هيكلة للسيستم بعد فترة بدون كلفة كبيرة؟\\n  **ج:** التعديلات البسيطة مشمولة بالدعم والتغييرات الجوهرية تقدم بأسعار مخفضة للعملاء.\\n- **س:** شلون أضمن عدم استغلال استهلاك الذكاء الاصطناعي من قبل المنافسين؟\\n  **ج:** نضع حدود استهلاك لكل مستخدم (Rate Limiting) لمنع الإفراط أو الاستنزاف المالي.\\n- **س:** هل تختلف كلفة البوت إذا كان بس يرد لو ياخذ طلبات؟\\n  **ج:** نعم، البوت الشامل لعمليات المبيعات والربط يحتاج هندسة مسارات أكثر فتكون كلفته أعلى كليلاً.\\n- **س:** هل يوجد عقد رسمي يضمن حقوق الطرفين؟\\n  **ج:** نعم، نوقع عقد عمل رسمي يوضح التفاصيل التقنية، التكاليف، الجدول الزمني، والتزامات الدعم.\\n- **س:** هل أقدر أشتري الكود المصدري (Source Code) بالكامل؟\\n  **ج:** نعم، يتاح خيار شراء الكود والملكية الفكرية الكاملة للنظام ضمن باقة خاصة (Enterprise).\\n- **س:** شنو يصير إذا زاد عدد موظفين المبيعات عندي بالسيستم؟\\n  **ج:** تقدر تضيف موظفين جدد للباقة، وتكلفة الحسابات الإضافية تكون رمزية جداً.\\n- **س:** هل يوفر النظام فترة تجريبية (Demo)؟\\n  **ج:** تصمم لك عرضاً توضيحياً حياً (Live Demo) يراويك شلون يشتغل البوت بقطاع عملك قبل التعاقد.\\n- **س:** هل الاستشارات التقنية بعد التسليم بفلوس؟\\n  **ج:** الاستشارات القصيرة والنصائح ضمن باقة الدعم تكون مجانية تماماً.\\n- **س:** كيف تضمنون أفضل قيمة مقابل السعر؟\\n  **ج:** نركز على بناء نظام يقلل مصاريفك التشغيلية ويزيد أرباحك ليكون العائد على الاستثمار (ROI) سريع جداً.\\n- **س:** هل توجد رسوم إضافية عند تحديث نماذج الذكاء الاصطناعي لنسخ أحدث؟\\n  **ج:** نحدث للنظام الأحدث تلقائياً دون رسوم إضافية طالما الاستهلاك ضمن حدود الباقة.\\n- **س:** ما هي التكلفة المتوقعة لحسابات واتساب الرسمية؟\\n  **ج:** Meta تتيح 1,000 محادثة مجانية شهرياً، وما زاد عنها يحسب بفلسات بسيطة حسب الدولة.\\n- **س:** شلون تقدم طلب دعم فني إذا صار خلل؟\\n  **ج:** تتصل بينا مباشر أو تدز طلب عبر قناة الدعم المخصصة لشركتك على واتساب / تليغرام وتتفتح تكت فورية.\\n- **س:** شكد وقت الاستجابة لطلبات الصيانة؟\\n  **ج:** فريق الدعم يستجيب للحالات الحرجة خلال أقل من 30 دقيقة، وللاستفسارات العادية خلال ساعتين.\\n- **س:** شلون طريقة التسليم والخطوات التأسيسية؟\\n  **ج:** 1. تحليل المتطلبات، 2. تصميم المسارات والداتا، 3. البرمجة والربط، 4. الاختبار والتدريب، 5. الإطلاق والاعتماد.\\n- **س:** كم يستغرق بناء السيستم بالكامل؟\\n  **ج:** يستغرق المتوسط بين أسبوعين إلى 4 أسابيع حسب حجم وتداخل النظام مع الأنظمة الخارجية.\\n- **س:** منو يكتب الأجوبة والداتا اللي يتعلمها البوت؟\\n  **ج:** إحنا نساعدك بصياغتها وهيكلتها بناءً على الأسئلة والملفات اللي تزودنا بيها عن عملك.\\n- **س:** هل تدربون الفريق مالتي على الاستخدام؟\\n  **ج:** نعم، نسوي ورشة تدريبية أونلاين أو بمكتبكم مع تقديم فيديوات تعليمية مخصصة لشغلك.\\n- **س:** شنو يصير إذا ردت أغير بالسيستم بعد التسليم؟\\n  **ج:** تقدر تحدد التعديلات، إذا كانت بسيطة تتنفذ فوراً بالدعم الفني، وإذا كبيرة ندرجها بجدول التطوير.\\n- **س:** هل توفرون تقارير أداء دورية للنظام؟\\n  **ج:** نعم، يدز لك السيستم تقرير أسبوعي / شهري بمدى تفاعل الزبائن، أكثر الأسئلة، ومعدل تحويل المبيعات.\\n- **س:** هل البوت يحتاج مراقبة مستمرة؟\\n  **ج:** في الأسابيع الأولى تراقب النظام وياك يومياً، وبعد استقراره يشتغل بآلية عالية بدون حاجة لتدخل.\\n- **س:** شلون تضمن البوت يستوعب المنتجات الجديدة فوراً؟\\n  **ج:** بجداول البيانات المربوطة، بس تضيف المنتجات بالشيت البوت يبدأ يوظفها بالردود بنفس اللحظة.\\n- **س:** هل تقدمون خدمة كتابة المحتوى والردود الذكية؟\\n  **ج:** نعم، نراجع الردود ونحسن صياغتها لتكون أكثر جاذبية وتسويقية للزبائن.\\n- **س:** شنو الإجراء إذا فيسبوك أو واتساب غيروا سياساتهم؟\\n  **ج:** فريقنا التقني يتابع التحديثات ويعدل الأكواد آلياً لضمان استمرار عملك دون انقطاع.\\n- **س:** هل يوفر السيستم اختبار أسلوب الردود (A/B Testing)؟\\n  **ج:** نعم، تقدر تختبر نصوص ردود مختلفة لتحديد أي نص يقنع الزبون بالشراء أكثر.\\n- **س:** كيف يتم التأكد من عدم وجود أخطاء لغوية بالردود؟\\n  **ج:** الذكاء الاصطناعي مدرب على قواعد اللغة، ونضبط المدخلات النصية لمنع أي كسور لغوية.\\n- **س:** هل يمكن إضافة ميزات الذكاء الاصطناعي الصوتي مستقبلاً؟\\n  **ج:** نعم، النظام مجهز للربط مع أنظمة التفاعل الصوتي (Voice Bots) أول ما تطلبها.\\n- **س:** هل يتيح النظام قياس مدى رضا الزبون بعد كل محادثة؟\\n  **ج:** نعم، عبر إرسال استبيان سريع يحلل النتيجة ويجمع التقييمات بشيت الإدارة.\\n- **س:** شلون نتعامل ويا حالات الزخم العالي بالأعياد أو المناسبات؟\\n  **ج:** البوت يستوعب أي قفزة بأعداد الرسائل تلقائياً بدون ما يحتاج أي إعدادات إضافية.\\n- **س:** هل تقدر تسوي نسخ للشغلة وفرع جديد بسهولة؟\\n  **ج:** نعم، النظام بهيكلية موديولية (Modular) تسمح بنسخ المسارات وتطبيقها لفرع جديد بظرف ساعات.\\n- **س:** ما هو دور العميل أثناء مرحلة التطوير؟\\n  **ج:** تزويدنا بالبيانات والأسئلة الشائعة، ومراجعة وتجربة النسخ التجريبية اللي بنقدمها.\\n- **س:** هل البوت يقدر يقترح منتجات بديلة إذا المنتج خلصان؟\\n  **ج:** نعم، إذا المنتج غير متوفر بالمخزن، يقدر يحلل الكاتلوج ويقترح أقرب منتج مشابه للزبون.\\n- **س:** شنو فائدة لوحة التحكم الذكية اللي تنطونا إياها؟\\n  **ج:** تخليك تتفرج على المحادثات الحية، تعدل البيانات، تشوف الأرقام، وتتحكم بالموظفين بمكان واحد.\\n- **س:** هل أقدر أدعو فريقكم لاجتماع تقييمي شهري؟\\n  **ج:** نعم، نخصص جلسة مراجعة شهرية مع عملائنا لمناقشة الأداء والتطويرات المستهدفة.\\n- **س:** ماذا يحدث لو واجهنا مشكلة خارج أوقات الدوام الرسمي؟\\n  **ج:** أنظمة المراقبة الآلية (Monitoring) تنبهنا بأي توقف، وتتدخل الطوارئ التقنية آلياً لتعديله.\\n- **س:** هل السيستم ينطي تحذير إذا الداتا القادمة من الزبون ناقصة؟\\n  **ج:** نعم، ما يثبت الطلب إلا بعد ما يكتمل الاسم، الرقم، والعنوان بدقة ويا الزبون.\\n- **س:** شلون يحلل البوت العناوين المعقدة داخل المدن العراقية؟\\n  **ج:** مدرب على تفاصيل المحافظات والمناطق والأحياء والمحلات بالعراق لتأكيد موقع التوصيل.\\n- **س:** هل أقدر أستعين بفريقكم لتدريب موظف مبيعات جديد؟\\n  **ج:** نعم، نوفر الدليل الإرشادي والفيديوات المصورة اللي تسهل تدريب أي موظف جديد بظرف دقائق.\\n- **س:** هل البوت يقدر يعيد تذكير الزبون بموعد التثبيت؟\\n  **ج:** نعم، يرسل إشعار تذكيري قبل 24 ساعة وقبل ساعة من موعد الحجز لتأكيد الحضور.\\n- **س:** كيف يساعد السيستم بتحسين كفاءة فريق المبيعات؟\\n  **ج:** يزيح عنهم 80% من الضغط الروتيني ويخليهم يركزون بس على الزبائن الجادين وإغلاق الصفقة.\\n- **س:** هل السيستم يدعم إرسال ملفات الكاتلوج التفاعلية؟\\n  **ج:** نعم، يقدر يدز كاتلوج المنتجات التفاعلي المباشر داخل منصة الواتساب.\\n- **س:** شلون السيستم يحسب تكلفة التوصيل لكل محافظة؟\\n  **ج:** نبرمج جدول كلف التوصيل حسب كل محافظة، والبوت يحسبها ويزيدها على المجموع تلقائياً.\\n- **س:** هل أقدر أغير اسم أو شخصية البوت مستقبلاً؟\\n  **ج:** نعم، تغيير نبرة أو اسم البوت يتم بضغطة زر من خلال تعديل الـ System Prompt.\\n- **س:** شنو ضمان أداء الخدمة (SLA) اللي تقدموه؟\\n  **ج:** نلتزم بنسبة تشغيل وتواجد أنظمة لا تقل عن 99.5% وفق عقد اتفاقية مستوى الخدمة.\\n- **س:** كيف نتعامل مع الأرقام التالفة أو الخاطئة التي يدخلها الزبون؟\\n  **ج:** البوت يتحقق من صيغة الرقم العراقي (11 رقم يبدأ بـ 07) ويطلب التصحيح إذا كان خاطئاً.\\n- **س:** هل السيستم يتيح للمدير الدخول سراً على المحادثة المباشرة؟\\n  **ج:** نعم، يقدر المدير يراقب المحادثة الشغالة بين الموظف والزبون بدون ما يدرون لإعطاء توجيهات.\\n- **س:** شلون تبدأ العمل معنا الآن؟\\n  **ج:** تواصل ويا فريقنا اليوم لتحديد موعد المكالمة الاستكشافية وبدء رحلة الأتمتة الذكية لشغلك!\";\n\nconst lowerText = messageText.toLowerCase();\nconst isAuthCommand = !sd.adminSenderId && (\n  lowerText.includes('aboody') || lowerText.includes('alfaloje') || \n  messageText.includes('عبود') || messageText.includes('الفلوجي') || \n  messageText.includes('الادمن') || messageText.includes('الأدمن') || \n  lowerText.includes('aabbddaa1') || messageText.startsWith('/admin')\n);\n\nif (!sd.adminSenderId && isAuthCommand) {\n  sd.adminSenderId = senderId;\n  return [{\n    json: {\n      senderId: senderId,\n      messageText: messageText,\n      isAdmin: true,\n      isAdminCommand: true,\n      directReply: `👑 أهلاً وسهلاً بك أستاذ عبود الفلوجي (Aboody.alfaloje)!\\nتم ربط حسابك الشخصي كـ الأدمن المسؤول الوحيد عن البوت.\\n\\nالأوامر والميزات المتاحة لك:\\n1️⃣ اكتب: (اختبار كزبون) - لتجربة البوت بشخصية مصطفى موظف المبيعات العراقي الأصيل!\\n2️⃣ اكتب: (إحصائيات) - لعرض تقرير الزبائن اليومي.\\n3️⃣ اكتب: (تحديث البرومبت: ...) - لتعديل برومبت البوت فوراً.`\n    }\n  }];\n}\n\nconst isAdmin = (sd.adminSenderId && senderId === sd.adminSenderId);\n\nif (isAdmin) {\n  if (messageText.includes('اختبار كزبون') || messageText.includes('وضع التجربة') || messageText.includes('تجربة البوت') || lowerText === '/test') {\n    sd.adminTestingMode = true;\n    delete sd.savedPhones[senderId];\n    delete sd.savedNames[senderId];\n    return [{\n      json: {\n        senderId: senderId,\n        messageText: messageText,\n        isAdmin: true,\n        isAdminCommand: true,\n        directReply: `🧪 **أبشر أستاذ عبود! تم تفعيل وضع تجربة الزبون بشخصية مصطفى بالعراقي القح!**\\nاختبر الردود والأسئلة والتجاوز كزبون عادي.\\n\\nللخروج والعودة لوضع الأدمن في أي وقت، اكتب فقط: (إنهاء الاختبار) أو (وضع الأدمن).`\n      }\n    }];\n  }\n\n  if (messageText.includes('إنهاء الاختبار') || messageText.includes('انهاء الاختبار') || messageText.includes('وضع الأدمن') || messageText.includes('وضع الادمن') || lowerText === '/admin') {\n    sd.adminTestingMode = false;\n    return [{\n      json: {\n        senderId: senderId,\n        messageText: messageText,\n        isAdmin: true,\n        isAdminCommand: true,\n        directReply: `👑 **تم الخروج من وضع التجربة والعودة إلى وضع الأدمن المسؤول مع مصطفى كالمعتاد أستاذ عبود.**`\n      }\n    }];\n  }\n\n  if (sd.adminTestingMode) {\n    return [{\n      json: {\n        senderId: senderId,\n        messageText: messageText,\n        isAdmin: false,\n        isAdminCommand: false,\n        activeSystemPrompt: sd.customPrompt || defaultCustomerPrompt,\n        directReply: ''\n      }\n    }];\n  }\n\n  if (messageText.includes('إحصائيات') || messageText.includes('احصائيات') || messageText.includes('التقارير') || messageText.includes('تقرير') || messageText.includes('كم زبون')) {\n    const statusText = now < sd.globalPausedUntil \n      ? `مُوقف مؤقتاً عاماً حتى ${new Date(sd.globalPausedUntil).toLocaleTimeString('ar-IQ')}`\n      : 'شغال بنجاح ورسمي 🟢';\n    return [{\n      json: {\n        senderId: senderId,\n        messageText: messageText,\n        isAdmin: true,\n        isAdminCommand: true,\n        directReply: `📊 **تقرير أداء بوت جاوبني للأستاذ عبود الفلوجي:**\\n\\n👥 إجمالي الزبائن المسجلين: ${sd.stats.totalCustomers} زبون\\n📅 زبائن اليوم (${todayStr}): ${sd.stats.todayCustomers} زبون\\n📱 رقم إشعارات الأدمن: ${ADMIN_PHONE}\\n⏱️ حالة الرد الآلي: ${statusText}`\n      }\n    }];\n  }\n\n  if (messageText.includes('إيقاف العام') || messageText.includes('تعطيل الكل') || lowerText.includes('pauseall')) {\n    sd.globalPausedUntil = now + 3600000;\n    return [{\n      json: {\n        senderId: senderId,\n        messageText: messageText,\n        isAdmin: true,\n        isAdminCommand: true,\n        directReply: `⏸️ تدلل أستاذ عبود، تم إيقاف الرد التلقائي العام للبوت لمدة ساعة واحدة بناءً على طلبك.`\n      }\n    }];\n  }\n\n  if (messageText.includes('تفعيل') || messageText.includes('تشغيل') || messageText.includes('استئناف') || lowerText.includes('unpause')) {\n    sd.globalPausedUntil = 0;\n    return [{\n      json: {\n        senderId: senderId,\n        messageText: messageText,\n        isAdmin: true,\n        isAdminCommand: true,\n        directReply: `🟢 تدلل أستاذ عبود! تم تفعيل الرد التلقائي للبوت بنجاح ومصطفى مستعد لاستقبال كافة الزبائن الآن.`\n      }\n    }];\n  }\n\n  if (messageText.startsWith('تحديث البرومبت:') || messageText.startsWith('/setprompt')) {\n    const newPrompt = messageText.replace(/^(تحديث البرومبت:|\\/setprompt)\\s*/i, '').trim();\n    if (newPrompt) {\n      sd.customPrompt = newPrompt;\n      return [{\n        json: {\n          senderId: senderId,\n          messageText: messageText,\n          isAdmin: true,\n          isAdminCommand: true,\n          directReply: `✅ تم تحديث برومبت البوت بنجاح أستاذ عبود!\\nالتعليمات الجديدة المعتمدة الآن للرد على الزبائن:\\n\\n${newPrompt}`\n        }\n      }];\n    }\n  }\n\n  if (messageText === 'البرومبت الحالي' || messageText === '/getprompt') {\n    const active = sd.customPrompt || defaultCustomerPrompt;\n    const isCustom = !!sd.customPrompt;\n    return [{\n      json: {\n        senderId: senderId,\n        messageText: messageText,\n        isAdmin: true,\n        isAdminCommand: true,\n        directReply: `📋 البرومبت المعتمد حالياً للبوت (${isCustom ? 'مُعدّل بواسطة الأدمن عبود الفلوجي' : 'سكل مصطفى موظف المبيعات العراقي الأصيل'}):\\n\\n${active}`\n      }\n    }];\n  }\n\n  if (messageText === 'إعادة تعيين البرومبت' || messageText === 'إعادة ضبط البرومبت' || messageText === '/resetprompt') {\n    delete sd.customPrompt;\n    return [{\n      json: {\n        senderId: senderId,\n        messageText: messageText,\n        isAdmin: true,\n        isAdminCommand: true,\n        directReply: `🔄 تم إعادة تعيين البرومبت إلى النظام الافتراضي الأصلي وقاعدة بيانات الـ 210 سؤال بنجاح أستاذ عبود.`\n      }\n    }];\n  }\n}\n\nconst isGlobalPaused = (now < sd.globalPausedUntil);\n\nif (!isAdmin && isGlobalPaused) {\n  return [{\n    json: {\n      senderId: senderId,\n      messageText: messageText,\n      isAdmin: false,\n      isAdminCommand: true,\n      directReply: ''\n    }\n  }];\n}\n\nlet activeSystemPrompt = '';\nif (isAdmin) {\n  activeSystemPrompt = adminCopilotPrompt;\n} else {\n  activeSystemPrompt = sd.customPrompt || defaultCustomerPrompt;\n}\n\nreturn [{\n  json: {\n    senderId: senderId,\n    messageText: messageText,\n    isAdmin: isAdmin,\n    isAdminCommand: false,\n    activeSystemPrompt: activeSystemPrompt,\n    directReply: ''\n  }\n}];"
+      },
+      "id": "8a7b6c5d-4e3f-2a1b-0c9d-8e7f6a5b4c3d",
+      "name": "Check Admin & Routing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-admin-cmd",
+              "leftValue": "={{ $json.isAdminCommand }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+      "name": "Is Direct Admin Reply?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1344,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v26.0/me/messages",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "=EAANIe9LyLf8BSCAERwJmhGEZA5q6TZAfWzzkKXRbiNpYjRE6RcXJPHUT6DaIdW0cJrpR4XeVjkZA4nm7ZAxNMUj1gMw1ZCCi47QcZA6eVIqKgZBnH7HqlIh54KgroLR0O9yZA1GXI3jOvjCVcgd4zWjt9TyGJuMi8EsDiXC4ZAeZBpGOJN0fZCVHTd2gsbVmZAKN5Km2kVRwgKtyTwZDZD"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"recipient\": { \"id\": \"{{ $json.adminSenderId }}\" }, \"messaging_type\": \"RESPONSE\", \"message\": { \"text\": {{ JSON.stringify(\"🔔 هذا الشخص يريد يتواصل وياك\\nهذا اسمه : \" + $json.name + \"\\nوهذا رقمه : \" + $json.phone) }} } }",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "9e8d7c6b-5a4f-3e2d-1c0b-9a8b7c6d5e4f",
+      "name": "Notify Admin Messenger",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3824,
+        700
+      ],
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond 200": {
+      "main": [
+        [
+          {
+            "node": "Guard (Dedupe + Rate Limit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guard (Dedupe + Rate Limit)": {
+      "main": [
+        [
+          {
+            "node": "Is Valid Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid Message?": {
+      "main": [
+        [
+          {
+            "node": "Combine Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Message": {
+      "main": [
+        [
+          {
+            "node": "Send Typing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Typing": {
+      "main": [
+        [
+          {
+            "node": "Check Admin & Routing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Message": {
+      "main": [
+        [
+          {
+            "node": "Download Audio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Download Image",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unsupported Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Audio": {
+      "main": [
+        [
+          {
+            "node": "Prepare Audio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Audio": {
+      "main": [
+        [
+          {
+            "node": "Gemini Transcription",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Transcription": {
+      "main": [
+        [
+          {
+            "node": "Parse Transcript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Transcript": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Process Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Customer Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Response": {
+      "main": [
+        [
+          {
+            "node": "Send Reply",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Has Customer Details?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Customer Details?": {
+      "main": [
+        [
+          {
+            "node": "Save Customer",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Notify Admin Messenger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Reply": {
+      "main": [
+        [
+          {
+            "node": "Send Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Image": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unsupported Reply": {
+      "main": [
+        [
+          {
+            "node": "Send Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Admin & Routing": {
+      "main": [
+        [
+          {
+            "node": "Is Direct Admin Reply?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Direct Admin Reply?": {
+      "main": [
+        [
+          {
+            "node": "Send Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Route Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ca956bb035fe5e46b3b1c5c6525c5f5a0a1285be9fd23039fee79a6bc3850898"
+  }
+}

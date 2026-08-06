@@ -5,6 +5,8 @@ services:
     plan: free
     dockerfilePath: ./Dockerfile
     envVars:
+      - key: DB_TYPE
+        value: "sqlite"
       - key: N8N_PORT
         value: "10000"
       - key: PORT
@@ -15,10 +17,8 @@ services:
         value: "https"
       - key: N8N_EDITOR_BASE_URL
         value: "https://jawebni-insta-bot.onrender.com"
-      - key: WEBHOOK_URL
+      - key: N8N_WEBHOOK_URL
         value: "https://jawebni-insta-bot.onrender.com/"
-      - key: EXECUTIONS_PROCESS
-        value: "main"
       - key: NODE_OPTIONS
         value: "--max-old-space-size=400"
       - key: N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS

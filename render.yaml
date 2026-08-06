@@ -7,6 +7,10 @@ services:
     envVars:
       - key: DB_TYPE
         value: "sqlite"
+      - key: DB_SQLITE_DATABASE
+        value: "/home/node/.n8n/database.sqlite"
+      - key: N8N_USER_FOLDER
+        value: "/home/node"
       - key: N8N_PORT
         value: "10000"
       - key: PORT

@@ -2,11 +2,13 @@ FROM n8nio/n8n:latest
 
 USER root
 
-# Setup permissions for node home directory
-RUN mkdir -p /home/node/.n8n && chown -R node:node /home/node/.n8n
+# Ensure home directory permissions are completely open for node user
+RUN mkdir -p /home/node/.n8n && chown -R node:node /home/node && chmod -R 777 /home/node
 
-# Set environment variables for Render & n8n v1.x
+# Set environment variables for Render & n8n v1.x SQLite
 ENV DB_TYPE=sqlite
+ENV DB_SQLITE_DATABASE=/home/node/.n8n/database.sqlite
+ENV N8N_USER_FOLDER=/home/node
 ENV N8N_PORT=10000
 ENV PORT=10000
 ENV N8N_HOST=0.0.0.0

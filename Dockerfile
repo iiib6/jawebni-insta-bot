@@ -13,6 +13,7 @@ ENV N8N_PORT=10000
 ENV PORT=10000
 ENV N8N_HOST=0.0.0.0
 ENV N8N_PROTOCOL=https
+ENV N8N_EDITOR_BASE_URL=https://jawebni-insta-bot.onrender.com
 ENV N8N_WEBHOOK_URL=https://jawebni-insta-bot.onrender.com/
 ENV N8N_SECURE_COOKIE=false
 ENV NODE_OPTIONS="--max-old-space-size=400"

@@ -5,13 +5,14 @@ USER root
 # Ensure home directory permissions are completely open for node user
 RUN mkdir -p /home/node/.n8n && chown -R node:node /home/node && chmod -R 777 /home/node
 
-# Set environment variables for Render & PostgreSQL
+# Set environment variables for Render & PostgreSQL with SSL enabled
 ENV DB_TYPE=postgresdb
 ENV DB_POSTGRESDB_HOST=dpg-d9qf2ff10e5c739hrpl0-a
 ENV DB_POSTGRESDB_PORT=5432
 ENV DB_POSTGRESDB_DATABASE=jawebni_db
 ENV DB_POSTGRESDB_USER=jawebni_db_user
 ENV DB_POSTGRESDB_PASSWORD=ywiN9d37JcCLFpvHQNDQU7ACTrHZRHKL
+ENV DB_POSTGRESDB_SSL=true
 ENV DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED=false
 
 # Fixed Encryption Key for saving credentials permanently

@@ -17,6 +17,8 @@ services:
         value: "jawebni_db_user"
       - key: DB_POSTGRESDB_PASSWORD
         value: "ywiN9d37JcCLFpvHQNDQU7ACTrHZRHKL"
+      - key: DB_POSTGRESDB_SSL
+        value: "true"
       - key: DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED
         value: "false"
       - key: N8N_ENCRYPTION_KEY

@@ -5,11 +5,13 @@ USER root
 # Setup permissions for node home directory
 RUN mkdir -p /home/node/.n8n && chown -R node:node /home/node/.n8n
 
-# Optimize n8n memory footprint for 512MB RAM free instances
+# Set environment variables for Render & n8n Editor UI
 ENV N8N_PORT=10000
 ENV PORT=10000
 ENV N8N_HOST=0.0.0.0
 ENV N8N_PROTOCOL=https
+ENV N8N_EDITOR_BASE_URL=https://jawebni-insta-bot.onrender.com/
+ENV WEBHOOK_URL=https://jawebni-insta-bot.onrender.com/
 ENV EXECUTIONS_PROCESS=main
 ENV NODE_OPTIONS="--max-old-space-size=400"
 ENV N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false

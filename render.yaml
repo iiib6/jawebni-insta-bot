@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: jawebni-n8n
+    name: jawebni-insta-bot
     env: docker
     plan: free
     dockerfilePath: ./Dockerfile
@@ -13,5 +13,9 @@ services:
         value: "0.0.0.0"
       - key: N8N_PROTOCOL
         value: "https"
+      - key: EXECUTIONS_PROCESS
+        value: "main"
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=400"
       - key: N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS
         value: "false"

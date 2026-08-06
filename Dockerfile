@@ -2,8 +2,8 @@ FROM n8nio/n8n:latest
 
 USER root
 
-# Setup permissions for home directory
-RUN mkdir -p /home/node/.n8n && chown -R 1000:1000 /home/node/.n8n
+# Create directory and set permissions for default node user
+RUN mkdir -p /home/node/.n8n && chown -R node:node /home/node/.n8n
 
 # Set Render default port 10000
 ENV N8N_PORT=10000
@@ -14,5 +14,4 @@ ENV N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
 
 EXPOSE 10000
 
-USER 1000
-CMD ["n8n", "start"]
+USER node

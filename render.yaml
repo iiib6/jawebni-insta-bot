@@ -6,9 +6,17 @@ services:
     dockerfilePath: ./Dockerfile
     envVars:
       - key: DB_TYPE
-        value: "sqlite"
-      - key: DB_SQLITE_DATABASE
-        value: "/home/node/.n8n/database.sqlite"
+        value: "postgresdb"
+      - key: DB_POSTGRESDB_HOST
+        value: "dpg-d9qf2ff10e5c739hrpl0-a"
+      - key: DB_POSTGRESDB_PORT
+        value: "5432"
+      - key: DB_POSTGRESDB_DATABASE
+        value: "jawebni_db"
+      - key: DB_POSTGRESDB_USER
+        value: "jawebni_db_user"
+      - key: DB_POSTGRESDB_PASSWORD
+        value: "ywiN9d37JcCLFpvHQNDQU7ACTrHZRHKL"
       - key: N8N_USER_FOLDER
         value: "/home/node"
       - key: N8N_PORT

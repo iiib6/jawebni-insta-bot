@@ -5,9 +5,13 @@ USER root
 # Ensure home directory permissions are completely open for node user
 RUN mkdir -p /home/node/.n8n && chown -R node:node /home/node && chmod -R 777 /home/node
 
-# Set environment variables for Render & n8n v1.x
-ENV DB_TYPE=sqlite
-ENV DB_SQLITE_DATABASE=/home/node/.n8n/database.sqlite
+# Set environment variables for Render & PostgreSQL
+ENV DB_TYPE=postgresdb
+ENV DB_POSTGRESDB_HOST=dpg-d9qf2ff10e5c739hrpl0-a
+ENV DB_POSTGRESDB_PORT=5432
+ENV DB_POSTGRESDB_DATABASE=jawebni_db
+ENV DB_POSTGRESDB_USER=jawebni_db_user
+ENV DB_POSTGRESDB_PASSWORD=ywiN9d37JcCLFpvHQNDQU7ACTrHZRHKL
 ENV N8N_USER_FOLDER=/home/node
 ENV N8N_PORT=10000
 ENV PORT=10000

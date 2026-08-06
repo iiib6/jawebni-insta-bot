@@ -28,20 +28,18 @@ const SYSTEM_PROMPT = `# مصطفى — موظف المبيعات العراقي
 الرد كله باللهجة العراقية العامية البسيطة والدافيّة بدون تكلّف.
 - مفردات إلزامية: شلونك، شنو، هواي، شوية، اكو / ماكو، هسه، كان، خوش، زين، أي والله، عيني، حبيبي (بمحلها ولطيف)، تدلل، على راسي، ما عليه، خل نشوف، دزلي، شوف، انطيني، يمعود، بلچي، وياك، صدك؟، تمام، شكد، چم، لك، اشلون، هيچ، هنا، قاعد، ما يصير، خلص، عالراحة.
 - حظر الكلمات المو عراقية كلياً: ممنوع (اقدر، اقلك، قلي، قلتلك، قال، يقول، عايز، كده، دلوقتي، وش، ابي، كتير، هلق، منيح، شو، حضرتك).
-- بدلها حتماً: أكدر، أكلك، كلي، كتلك، كال، يكول، هنا، صدك؟، أعرضلك، شلون، أريد، هيچ، هسه، هواي، زين.
-
----\n\n## 3. حفظ واستخراج البيانات
-يجب أن تعيد إجابتك بصيغة JSON تحتوي الحقول التالية دائماً:
-{
-  "reply": "نص الرد الموجه للزبون باللهجة العراقية",
-  "name": "اسم الزبون إذا ذكره أو فارغ",
-  "phone": "رقم هاتف الزبون يبدأ بـ 0 إذا ذكره أو فارغ",
-  "details_complete": true أو false
-}`;
+- بدلها حتماً: أكدر، أكلك، كلي، كتلك، كال، يكول، هنا، صدك؟، أعرضلك، شلون، أريد، هيچ، هسه، هواي، زين.`;
 
 // Root endpoint for status
 app.get('/', (req, res) => {
   res.send('🚀 Jawebni Instagram & Messenger AI Bot Server is Live 24/7!');
+});
+
+// Test endpoint to trigger Gemini directly
+app.get('/test-ai', async (req, res) => {
+  const prompt = req.query.text || 'مرحبا شنو خدماتكم؟';
+  const reply = await callGeminiAI(prompt);
+  res.json({ prompt, reply });
 });
 
 // Meta Webhook Verification (GET)
@@ -63,10 +61,14 @@ app.post('/webhook', async (req, res) => {
 
   try {
     const body = req.body;
+    console.log('[INCOMING WEBHOOK]:', JSON.stringify(body));
+
     if (body.object !== 'instagram' && body.object !== 'page') return;
 
     const isInstagram = body.object === 'instagram';
-    const messaging = body.entry?.[0]?.messaging?.[0];
+    const entry = body.entry?.[0];
+    const messaging = entry?.messaging?.[0];
+
     if (!messaging || messaging.message?.is_echo || messaging.read || messaging.delivery) return;
 
     const senderId = messaging.sender?.id;
@@ -106,13 +108,13 @@ app.post('/webhook', async (req, res) => {
     const aiResponse = await callGeminiAI(userPrompt);
 
     // Process & Clean AI reply
-    let replyText = aiResponse.reply || 'تم استلام رسالتك، لحظة رجاءً.';
+    let replyText = aiResponse.reply || 'أهلاً بك بـ جاوبني! شلون أقدر أساعدك؟';
     replyText = replyText.replace(/\n{3,}/g, '\n\n').trim();
 
-    // Send Direct Reply (Supports both Instagram & Messenger)
+    // Send Direct Reply
     await sendReply(senderId, replyText, isInstagram);
 
-    console.log(`[BOT REPLY to ${senderId} (${isInstagram ? 'Instagram' : 'Messenger'})]: ${replyText}`);
+    console.log(`[SUCCESS REPLY to ${senderId}]: ${replyText}`);
   } catch (err) {
     console.error('Error processing webhook event:', err);
   }
@@ -121,10 +123,7 @@ app.post('/webhook', async (req, res) => {
 // Helper: Send Typing Indicator
 async function sendTyping(recipientId, isInstagram) {
   try {
-    const url = isInstagram
-      ? `https://graph.instagram.com/v26.0/me/messages?access_token=${INSTAGRAM_ACCESS_TOKEN}`
-      : `https://graph.facebook.com/v19.0/me/messages?access_token=${INSTAGRAM_ACCESS_TOKEN}`;
-
+    const url = `https://graph.instagram.com/v26.0/me/messages?access_token=${INSTAGRAM_ACCESS_TOKEN}`;
     await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -172,36 +171,53 @@ async function callGeminiAI(userText) {
       body: JSON.stringify({
         contents: [
           { role: 'user', parts: [{ text: `${SYSTEM_PROMPT}\n\nرسالة الزبون: "${userText}"` }] }
-        ],
-        generationConfig: { responseMimeType: 'application/json' }
+        ]
       })
     });
     const data = await res.json();
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    return JSON.parse(rawText);
+    
+    let cleanText = rawText.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').trim();
+    if (cleanText.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(cleanText);
+        cleanText = parsed.reply || cleanText;
+      } catch (e) {}
+    }
+    return { reply: cleanText || 'أهلاً بك بـ جاوبني!' };
   } catch (e) {
     console.error('Gemini API error:', e.message);
     return { reply: 'أهلاً بك بـ جاوبني! شلون أقدر أساعدك اليوم؟' };
   }
 }
 
-// Helper: Send Reply
+// Helper: Send Reply (with fallback endpoints)
 async function sendReply(recipientId, text, isInstagram) {
-  try {
-    const url = isInstagram
-      ? `https://graph.instagram.com/v26.0/me/messages?access_token=${INSTAGRAM_ACCESS_TOKEN}`
-      : `https://graph.facebook.com/v19.0/me/messages?access_token=${INSTAGRAM_ACCESS_TOKEN}`;
+  const endpoints = [
+    `https://graph.instagram.com/v26.0/me/messages?access_token=${INSTAGRAM_ACCESS_TOKEN}`,
+    `https://graph.facebook.com/v19.0/me/messages?access_token=${INSTAGRAM_ACCESS_TOKEN}`
+  ];
 
-    await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        recipient: { id: recipientId },
-        message: { text: text }
-      })
-    });
-  } catch (e) {
-    console.error('Send reply error:', e.message);
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipient: { id: recipientId },
+          message: { text: text }
+        })
+      });
+      const data = await res.json();
+      if (res.ok || data.message_id || data.recipient_id) {
+        console.log('[REPLY SENT OK]:', data);
+        return;
+      } else {
+        console.error('[REPLY FAIL]:', data);
+      }
+    } catch (e) {
+      console.error('[REPLY EXCEPTION]:', e.message);
+    }
   }
 }
 

@@ -19,10 +19,10 @@ services:
         value: "0.0.0.0"
       - key: N8N_PROTOCOL
         value: "https"
-      - key: N8N_EDITOR_BASE_URL
-        value: "https://jawebni-insta-bot.onrender.com"
       - key: N8N_WEBHOOK_URL
         value: "https://jawebni-insta-bot.onrender.com/"
+      - key: N8N_SECURE_COOKIE
+        value: "false"
       - key: NODE_OPTIONS
         value: "--max-old-space-size=400"
       - key: N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS

@@ -3,7 +3,7 @@ const app = express();
 
 app.use(express.json());
 
-// CONFIGURATION (Environment variables with defaults from workflow)
+// CONFIGURATION (Environment variables with defaults)
 const PORT = process.env.PORT || 3005;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyB5vt6NoqoUjI8Z0WIzdYyw7cbyrj4d_Pk';
 const INSTAGRAM_ACCESS_TOKEN = process.env.INSTAGRAM_ACCESS_TOKEN || 'IGAAgiFmQluypBZAGFwSzlSa0V5ZA2hqOTlGcDVkMWdjUmRhZAGVFYTZAPc0oydVdRSnZAORURYdkp0a1VubzctSk9qVUpxcU5DMThRT2pQNmZAWTFdLLXBJeGxQY3B6ZAmE1bEpfQ2p0LUhDcFhsekRQZATFIRFBmdFFoY19DV21TX291cwZDZD';
@@ -41,7 +41,7 @@ const SYSTEM_PROMPT = `# مصطفى — موظف المبيعات العراقي
 
 // Root endpoint for status
 app.get('/', (req, res) => {
-  res.send('🚀 Jawebni Instagram AI Bot Server is Live 24/7!');
+  res.send('🚀 Jawebni Instagram & Messenger AI Bot Server is Live 24/7!');
 });
 
 // Meta Webhook Verification (GET)
@@ -65,6 +65,7 @@ app.post('/webhook', async (req, res) => {
     const body = req.body;
     if (body.object !== 'instagram' && body.object !== 'page') return;
 
+    const isInstagram = body.object === 'instagram';
     const messaging = body.entry?.[0]?.messaging?.[0];
     if (!messaging || messaging.message?.is_echo || messaging.read || messaging.delivery) return;
 
@@ -81,7 +82,7 @@ app.post('/webhook', async (req, res) => {
     }
 
     // Send typing indicator
-    await sendTyping(senderId);
+    await sendTyping(senderId, isInstagram);
 
     let userPrompt = messageText;
 
@@ -108,19 +109,23 @@ app.post('/webhook', async (req, res) => {
     let replyText = aiResponse.reply || 'تم استلام رسالتك، لحظة رجاءً.';
     replyText = replyText.replace(/\n{3,}/g, '\n\n').trim();
 
-    // Send Instagram Direct Reply
-    await sendInstagramReply(senderId, replyText);
+    // Send Direct Reply (Supports both Instagram & Messenger)
+    await sendReply(senderId, replyText, isInstagram);
 
-    console.log(`[BOT REPLY to ${senderId}]: ${replyText}`);
+    console.log(`[BOT REPLY to ${senderId} (${isInstagram ? 'Instagram' : 'Messenger'})]: ${replyText}`);
   } catch (err) {
     console.error('Error processing webhook event:', err);
   }
 });
 
 // Helper: Send Typing Indicator
-async function sendTyping(recipientId) {
+async function sendTyping(recipientId, isInstagram) {
   try {
-    await fetch(`https://graph.instagram.com/v26.0/me/messages?access_token=${INSTAGRAM_ACCESS_TOKEN}`, {
+    const url = isInstagram
+      ? `https://graph.instagram.com/v26.0/me/messages?access_token=${INSTAGRAM_ACCESS_TOKEN}`
+      : `https://graph.facebook.com/v19.0/me/messages?access_token=${INSTAGRAM_ACCESS_TOKEN}`;
+
+    await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ recipient: { id: recipientId }, sender_action: 'typing_on' })
@@ -180,10 +185,14 @@ async function callGeminiAI(userText) {
   }
 }
 
-// Helper: Send Instagram DM
-async function sendInstagramReply(recipientId, text) {
+// Helper: Send Reply
+async function sendReply(recipientId, text, isInstagram) {
   try {
-    await fetch(`https://graph.instagram.com/v26.0/me/messages?access_token=${INSTAGRAM_ACCESS_TOKEN}`, {
+    const url = isInstagram
+      ? `https://graph.instagram.com/v26.0/me/messages?access_token=${INSTAGRAM_ACCESS_TOKEN}`
+      : `https://graph.facebook.com/v19.0/me/messages?access_token=${INSTAGRAM_ACCESS_TOKEN}`;
+
+    await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

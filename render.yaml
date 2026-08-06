@@ -17,6 +17,10 @@ services:
         value: "jawebni_db_user"
       - key: DB_POSTGRESDB_PASSWORD
         value: "ywiN9d37JcCLFpvHQNDQU7ACTrHZRHKL"
+      - key: DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED
+        value: "false"
+      - key: N8N_ENCRYPTION_KEY
+        value: "jawebni_secret_key_2026_super_secure"
       - key: N8N_USER_FOLDER
         value: "/home/node"
       - key: N8N_PORT
